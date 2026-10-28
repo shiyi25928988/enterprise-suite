@@ -41,8 +41,7 @@
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
 
-        <!-- 数据库 / Redis：M1.5 接入（骨架阶段用内存实现，可零依赖启动） -->
-        <!--
+        <!-- JDBC 持久化（M1.5）：未配置数据源时自动回退内存模式 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-jdbc</artifactId>
@@ -56,6 +55,8 @@
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-mysql</artifactId>
         </dependency>
+
+        <!-- Redis / Spring Session：M6 集群阶段启用，避免无 Redis 环境下 Session 自动装配失效
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-redis</artifactId>

@@ -32,7 +32,12 @@ Dependency direction is enforced at compile time: `auth-server → auth-user →
 # Requirements: JDK 21, Maven 3.9+
 mvn clean package -DskipTests
 
+# Option A: in-memory mode (zero external dependencies, dev/demo)
 java -jar auth-platform/auth-server/target/auth-server-*.jar
+
+# Option B: JDBC mode (Flyway creates SAS + platform schema on first boot)
+DB_USER=root DB_PWD=secret \
+java -jar auth-platform/auth-server/target/auth-server-*.jar --spring.profiles.active=jdbc
 ```
 
 Then:
@@ -47,7 +52,8 @@ Demo OIDC client registered for local testing: `mes-web` (public client, PKCE re
 
 - [x] M0 skeleton: multi-module build, three security filter chains, discovery reachable
 - [x] M1 login closed loop: JSON login API, SPA CSRF, `/api/auth/me`, JSON logout
-- [ ] M1.5 persistence: JDBC client/authorization stores, persistent JWK, Flyway schema
+- [x] M1.5 persistence: dual-mode wiring (JDBC / in-memory fallback), Flyway schema
+      (official SAS 7 DDL + platform tables), persistent JWK store with rotation history
 - [ ] M3 user domain: users / orgs / roles CRUD + HR sync
 - [ ] M4 admin UI: Vue 3 SPA (login + admin console)
 - [ ] M5 manufacturing: WeCom scan login, device flow, kick-off-line
