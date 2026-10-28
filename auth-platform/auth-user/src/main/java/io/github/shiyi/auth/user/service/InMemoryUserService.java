@@ -1,18 +1,16 @@
 package io.github.shiyi.auth.user.service;
 
-import io.github.shiyi.auth.user.dto.UserDTO;
-import org.springframework.stereotype.Service;
-
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
+import io.github.shiyi.auth.user.dto.UserDTO;
+
 /**
- * In-memory stub implementation. Replaced by MyBatis-Plus JDBC implementation in M3.
+ * In-memory stub implementation (no DataSource). Replaced by {@link JdbcUserService}
+ * when a DataSource is configured — see UserDomainConfig.
  */
-@Service
 public class InMemoryUserService implements UserService {
 
     private final Map<Long, UserDTO> store = new ConcurrentHashMap<>();

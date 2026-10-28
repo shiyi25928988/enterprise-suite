@@ -34,7 +34,7 @@ import io.github.shiyi.auth.server.auth.JsonUsernamePasswordFilter;
 import io.github.shiyi.auth.server.auth.LoginFailureHandler;
 import io.github.shiyi.auth.server.auth.LoginSuccessHandler;
 import io.github.shiyi.auth.server.auth.PlatformAuthenticationProvider;
-import io.github.shiyi.auth.server.auth.SkeletonUserDetailsService;
+import io.github.shiyi.auth.server.auth.PlatformUserDetailsService;
 import io.github.shiyi.auth.server.auth.SpaCsrfTokenRequestHandler;
 
 /**
@@ -134,9 +134,10 @@ public class SecurityConfig {
      * without touching the filter chains.
      */
     @Bean
-    AuthenticationManager authenticationManager(SkeletonUserDetailsService userDetailsService,
-                                                PasswordEncoder passwordEncoder) {
+    AuthenticationManager authenticationManager(PlatformUserDetailsService userDetailsService,
+                                                PasswordEncoder passwordEncoder,
+                                                io.github.shiyi.auth.user.account.UserAccountService accounts) {
         return new ProviderManager(
-                new PlatformAuthenticationProvider(userDetailsService, passwordEncoder));
+                new PlatformAuthenticationProvider(userDetailsService, passwordEncoder, accounts));
     }
 }
