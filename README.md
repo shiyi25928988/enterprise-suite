@@ -70,6 +70,8 @@ so browser traffic is same-origin — the same topology as production.
       users / orgs / roles management CRUD
 - [x] M4 login SPA: Vue 3 + Vite, session login, CSRF cookie mode,
       authorization-code + PKCE demo (in-memory tokens only)
+- [x] M4b admin console: users (paged CRUD, roles, reset password, status),
+      org tree, roles management
 - [ ] M5 manufacturing: WeCom scan login, device flow, kick-off-line
 - [ ] M6 hardening: load test (500+ TPS), audit reports, monitoring
 

@@ -177,7 +177,10 @@ public class JdbcUserService implements UserService {
     }
 
     private UserDTO toDto(SysUser user) {
+        List<Long> roleIds = userRoleMapper.selectList(new LambdaQueryWrapper<SysUserRole>()
+                        .eq(SysUserRole::getUserId, user.getId()))
+                .stream().map(SysUserRole::getRoleId).toList();
         return new UserDTO(user.getId(), user.getUsername(), user.getRealName(),
-                user.getOrgId(), user.getStatus(), user.getLastLoginTime());
+                user.getOrgId(), user.getStatus(), user.getLastLoginTime(), roleIds);
     }
 }

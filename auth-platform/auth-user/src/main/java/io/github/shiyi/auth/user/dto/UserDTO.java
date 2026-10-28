@@ -1,6 +1,7 @@
 package io.github.shiyi.auth.user.dto;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * User view object returned by the user API.
@@ -11,6 +12,7 @@ import java.time.LocalDateTime;
  * @param orgId        organization id
  * @param status       1 enabled, 0 disabled, 2 locked
  * @param lastLoginAt  last successful login time
+ * @param roleIds      assigned role ids (for admin UI prefill)
  */
 public record UserDTO(
         Long id,
@@ -18,5 +20,6 @@ public record UserDTO(
         String realName,
         Long orgId,
         Integer status,
-        LocalDateTime lastLoginAt) {
+        LocalDateTime lastLoginAt,
+        List<Long> roleIds) {
 }

@@ -29,7 +29,7 @@ public class InMemoryUserService implements UserService {
 
     private void create(String username, String realName, Long orgId) {
         long id = idSeq.incrementAndGet();
-        store.put(id, new UserDTO(id, username, realName, orgId, 1, null));
+        store.put(id, new UserDTO(id, username, realName, orgId, 1, null, java.util.List.of()));
     }
 
     private static BizException readOnly() {
