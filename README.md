@@ -46,7 +46,19 @@ Then:
 - Login (skeleton-stage default page): `admin / admin123`
 - User API (requires session): `http://localhost:9000/api/v1/users`
 
-Demo OIDC client registered for local testing: `mes-web` (public client, PKCE required).
+Demo OIDC client registered for local testing: `mes-web` (public client, PKCE required),
+redirect URI `http://localhost:8081/callback` (the Vite dev server port).
+
+### Frontend SPA (auth-web)
+
+```bash
+cd auth-web
+npm install
+npm run dev        # http://localhost:8081 — login with admin / admin123
+```
+
+In dev, Vite proxies `/api`, `/oauth2`, `/.well-known` etc. to the backend on :9000,
+so browser traffic is same-origin — the same topology as production.
 
 ## Roadmap
 
@@ -54,8 +66,10 @@ Demo OIDC client registered for local testing: `mes-web` (public client, PKCE re
 - [x] M1 login closed loop: JSON login API, SPA CSRF, `/api/auth/me`, JSON logout
 - [x] M1.5 persistence: dual-mode wiring (JDBC / in-memory fallback), Flyway schema
       (official SAS 7 DDL + platform tables), persistent JWK store with rotation history
-- [ ] M3 user domain: users / orgs / roles CRUD + HR sync
-- [ ] M4 admin UI: Vue 3 SPA (login + admin console)
+- [x] M3 user domain: JDBC auth source, login audit + auto-lock,
+      users / orgs / roles management CRUD
+- [x] M4 login SPA: Vue 3 + Vite, session login, CSRF cookie mode,
+      authorization-code + PKCE demo (in-memory tokens only)
 - [ ] M5 manufacturing: WeCom scan login, device flow, kick-off-line
 - [ ] M6 hardening: load test (500+ TPS), audit reports, monitoring
 

@@ -86,6 +86,7 @@ public class PersistenceConfig {
                 .clientAuthenticationMethod(ClientAuthenticationMethod.NONE)
                 .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
                 .authorizationGrantType(AuthorizationGrantType.REFRESH_TOKEN)
+                .redirectUri("http://localhost:8081/callback")          // auth-web SPA (Vite dev server on 8081)
                 .redirectUri("http://localhost:8081/login/oauth2/code/mes-web")
                 .postLogoutRedirectUri("http://localhost:8081/")
                 .scope(OidcScopes.OPENID)
