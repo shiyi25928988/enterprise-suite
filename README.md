@@ -46,7 +46,7 @@ Demo OIDC client registered for local testing: `mes-web` (public client, PKCE re
 ## Roadmap
 
 - [x] M0 skeleton: multi-module build, three security filter chains, discovery reachable
-- [ ] M1 login closed loop: JSON login API, CSRF, `/api/auth/me`, logout
+- [x] M1 login closed loop: JSON login API, SPA CSRF, `/api/auth/me`, JSON logout
 - [ ] M1.5 persistence: JDBC client/authorization stores, persistent JWK, Flyway schema
 - [ ] M3 user domain: users / orgs / roles CRUD + HR sync
 - [ ] M4 admin UI: Vue 3 SPA (login + admin console)
