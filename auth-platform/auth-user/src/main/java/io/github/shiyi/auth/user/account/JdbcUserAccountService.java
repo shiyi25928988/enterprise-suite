@@ -35,7 +35,9 @@ class JdbcUserAccountService implements UserAccountService {
             return Optional.empty();
         }
         return Optional.of(new UserAccount(user.getId(), user.getUsername(),
-                user.getPassword(), user.getRealName(), user.getStatus()));
+                user.getPassword(), user.getRealName(), user.getStatus(),
+                user.getMfaEnabled() != null && user.getMfaEnabled() == 1,
+                user.getTotpSecret()));
     }
 
     @Override
@@ -63,7 +65,25 @@ class JdbcUserAccountService implements UserAccountService {
             user = candidate;
         }
         return Optional.of(new UserAccount(user.getId(), user.getUsername(),
-                user.getPassword(), user.getRealName(), user.getStatus()));
+                user.getPassword(), user.getRealName(), user.getStatus(),
+                user.getMfaEnabled() != null && user.getMfaEnabled() == 1,
+                user.getTotpSecret()));
+    }
+
+    @Override
+    public void enableMfa(Long userId, String totpSecret) {
+        userMapper.update(null, new LambdaUpdateWrapper<SysUser>()
+                .eq(SysUser::getId, userId)
+                .set(SysUser::getMfaEnabled, 1)
+                .set(SysUser::getTotpSecret, totpSecret));
+    }
+
+    @Override
+    public void disableMfa(Long userId) {
+        userMapper.update(null, new LambdaUpdateWrapper<SysUser>()
+                .eq(SysUser::getId, userId)
+                .set(SysUser::getMfaEnabled, 0)
+                .set(SysUser::getTotpSecret, null));
     }
 
     @Override

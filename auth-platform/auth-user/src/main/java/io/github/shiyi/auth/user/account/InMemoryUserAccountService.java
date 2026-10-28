@@ -19,11 +19,25 @@ class InMemoryUserAccountService implements UserAccountService {
     InMemoryUserAccountService() {
         PasswordEncoder encoder = PasswordEncoderFactories.createDelegatingPasswordEncoder();
         users.put("admin", new UserAccount(1L, "admin",
-                encoder.encode("admin123"), "Administrator", 1));
+                encoder.encode("admin123"), "Administrator", 1, false, null));
         users.put("zhangsan", new UserAccount(2L, "zhangsan",
-                encoder.encode("Zhang@123"), "Zhang San", 1));
+                encoder.encode("Zhang@123"), "Zhang San", 1, false, null));
         roles.put(1L, List.of("ADMIN"));
         roles.put(2L, List.of("USER"));
+    }
+
+    @Override
+    public void enableMfa(Long userId, String totpSecret) {
+        users.replaceAll((k, v) -> v.id().equals(userId)
+                ? new UserAccount(v.id(), v.username(), v.password(), v.realName(), v.status(), true, totpSecret)
+                : v);
+    }
+
+    @Override
+    public void disableMfa(Long userId) {
+        users.replaceAll((k, v) -> v.id().equals(userId)
+                ? new UserAccount(v.id(), v.username(), v.password(), v.realName(), v.status(), false, null)
+                : v);
     }
 
     @Override

@@ -23,6 +23,12 @@ public interface UserAccountService {
     /** Role codes of the user, empty when none. */
     java.util.List<String> findRoleCodes(Long userId);
 
+    /** Persists the TOTP secret and turns the second factor on. */
+    void enableMfa(Long userId, String totpSecret);
+
+    /** Clears the TOTP secret and turns the second factor off. */
+    void disableMfa(Long userId);
+
     /** Records a successful login: audit row + clears fail counter + refreshes last_login_time. */
     void onLoginSuccess(String loginType, String username, Long userId, String ip, String userAgent);
 

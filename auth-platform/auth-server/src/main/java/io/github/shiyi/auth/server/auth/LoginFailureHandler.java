@@ -33,6 +33,15 @@ public class LoginFailureHandler implements AuthenticationFailureHandler {
     @Override
     public void onAuthenticationFailure(HttpServletRequest request, HttpServletResponse response,
                                         AuthenticationException exception) throws IOException {
+        // Password accepted, second factor pending: hand the challenge id back
+        // so the SPA can collect the TOTP code without re-sending credentials.
+        if (exception instanceof io.github.shiyi.auth.server.auth.mfa.MfaRequiredException mfa) {
+            JsonResponses.write(response, objectMapper, HttpStatus.UNAUTHORIZED,
+                    ApiResult.fail(ErrorCode.MFA_REQUIRED,
+                            java.util.Map.of("challengeId", mfa.getChallengeId(), "method", "TOTP")));
+            return;
+        }
+
         ApiResult<Void> body;
         if (exception instanceof org.springframework.security.authentication.CredentialsExpiredException) {
             body = ApiResult.fail(ErrorCode.PASSWORD_EXPIRED);

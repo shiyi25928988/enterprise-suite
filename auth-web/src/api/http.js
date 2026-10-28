@@ -22,6 +22,7 @@ http.interceptors.response.use(
     const apiError = new Error(resp?.data?.message || error.message || 'Network error')
     apiError.code = resp?.data?.code
     apiError.status = resp?.status
+    apiError.data = resp?.data?.data // e.g. {challengeId} on MFA_REQUIRED
     return Promise.reject(apiError)
   },
 )

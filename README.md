@@ -80,7 +80,9 @@ so browser traffic is same-origin — the same topology as production.
 - [x] M5a auth sources: AD/LDAP provider (auth.ldap.*), WeCom QR scan login
       (auth.wecom.*, auto-bind on first login), device-flow demo client
       `mes-screen` (8h token for workshop displays)
-- [ ] M5b: DingTalk, badge QR, MFA, per-device token policies
+- [x] M5b MFA: TOTP second factor (RFC 6238), challenge-based two-step login,
+      enrollment UI under Security settings; per-user opt-in
+- [ ] M5c: DingTalk, badge QR, per-device token policies, anomaly detection
 - [ ] M6 hardening: load test (500+ TPS), audit reports, monitoring
 
 See the [development doc](docs/) (Chinese) for the full specification.

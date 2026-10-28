@@ -47,6 +47,7 @@ public class PlatformUserDetailsService implements UserDetailsService {
                 account.realName(),
                 !locked,
                 enabled,
+                account.mfaEnabled(),
                 authorities);
     }
 }

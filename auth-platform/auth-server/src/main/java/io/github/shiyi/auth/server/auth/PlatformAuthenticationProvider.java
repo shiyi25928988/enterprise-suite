@@ -26,13 +26,16 @@ public class PlatformAuthenticationProvider implements AuthenticationProvider {
     private final UserDetailsService userDetailsService;
     private final PasswordEncoder passwordEncoder;
     private final UserAccountService accounts;
+    private final io.github.shiyi.auth.server.auth.mfa.MfaChallengeService mfaChallenges;
 
     public PlatformAuthenticationProvider(UserDetailsService userDetailsService,
                                           PasswordEncoder passwordEncoder,
-                                          UserAccountService accounts) {
+                                          UserAccountService accounts,
+                                          io.github.shiyi.auth.server.auth.mfa.MfaChallengeService mfaChallenges) {
         this.userDetailsService = userDetailsService;
         this.passwordEncoder = passwordEncoder;
         this.accounts = accounts;
+        this.mfaChallenges = mfaChallenges;
     }
 
     @Override
@@ -64,6 +67,13 @@ public class PlatformAuthenticationProvider implements AuthenticationProvider {
         }
         if (!user.isAccountNonLocked()) {
             throw new LockedException("Account locked");
+        }
+
+        // Password is correct — but a TOTP code is still required. No success
+        // audit yet: the login is only complete in /api/auth/mfa/verify.
+        if (user instanceof PlatformUser platformUser && platformUser.mfaEnabled()) {
+            throw new io.github.shiyi.auth.server.auth.mfa.MfaRequiredException(
+                    mfaChallenges.create(username));
         }
 
         accounts.onLoginSuccess("PASSWORD", username, userIdOf(user), ip, userAgent);

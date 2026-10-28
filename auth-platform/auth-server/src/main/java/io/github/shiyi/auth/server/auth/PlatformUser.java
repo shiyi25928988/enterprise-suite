@@ -20,6 +20,7 @@ public record PlatformUser(
         String realName,
         boolean accountNonLocked,
         boolean enabled,
+        boolean mfaEnabled,
         List<GrantedAuthority> authorities) implements UserDetails {
 
     @Override

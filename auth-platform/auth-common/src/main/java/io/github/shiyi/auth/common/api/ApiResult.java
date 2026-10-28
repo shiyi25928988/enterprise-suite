@@ -29,6 +29,11 @@ public record ApiResult<T>(int code, String message, T data, String traceId) {
         return new ApiResult<>(errorCode.code(), message, null, newTraceId());
     }
 
+    /** Failure carrying a payload (e.g. MFA_REQUIRED → {challengeId}). */
+    public static <T> ApiResult<T> fail(ErrorCode errorCode, T data) {
+        return new ApiResult<>(errorCode.code(), errorCode.message(), data, newTraceId());
+    }
+
     public boolean isSuccess() {
         return code == ErrorCode.OK.code();
     }

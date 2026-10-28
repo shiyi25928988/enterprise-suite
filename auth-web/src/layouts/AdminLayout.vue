@@ -29,6 +29,7 @@ async function logout() {
         <router-link to="/users">用户管理</router-link>
         <router-link to="/orgs">组织管理</router-link>
         <router-link to="/roles">角色管理</router-link>
+        <router-link to="/security">安全设置</router-link>
       </nav>
     </aside>
     <div class="main">

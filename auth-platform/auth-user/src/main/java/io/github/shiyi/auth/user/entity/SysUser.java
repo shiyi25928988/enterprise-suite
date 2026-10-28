@@ -46,6 +46,12 @@ public class SysUser {
     /** 1 enabled 0 disabled 2 locked */
     private Integer status;
 
+    /** 1 = TOTP second factor required at login */
+    private Integer mfaEnabled;
+
+    /** Base32 TOTP shared secret */
+    private String totpSecret;
+
     private LocalDateTime passwordUpdateTime;
 
     private LocalDateTime lastLoginTime;

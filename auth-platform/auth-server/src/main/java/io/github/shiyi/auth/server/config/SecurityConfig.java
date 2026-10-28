@@ -80,7 +80,8 @@ public class SecurityConfig {
         http.securityMatcher("/api/**")
             .authorizeHttpRequests(authorize -> authorize
                     .requestMatchers("/api/auth/csrf", "/api/auth/login",
-                            "/api/auth/wecom/config", "/api/auth/wecom/login").permitAll()
+                            "/api/auth/wecom/config", "/api/auth/wecom/login",
+                            "/api/auth/mfa/verify").permitAll()
                     .anyRequest().authenticated())
             .csrf(csrf -> csrf
                     .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
@@ -139,9 +140,11 @@ public class SecurityConfig {
     AuthenticationManager authenticationManager(PlatformUserDetailsService userDetailsService,
                                                 PasswordEncoder passwordEncoder,
                                                 io.github.shiyi.auth.user.account.UserAccountService accounts,
+                                                io.github.shiyi.auth.server.auth.mfa.MfaChallengeService mfaChallenges,
                                                 org.springframework.beans.factory.ObjectProvider<org.springframework.security.authentication.AuthenticationProvider> extraProviders) {
         var providers = new java.util.ArrayList<org.springframework.security.authentication.AuthenticationProvider>();
-        providers.add(new PlatformAuthenticationProvider(userDetailsService, passwordEncoder, accounts));
+        providers.add(new PlatformAuthenticationProvider(
+                userDetailsService, passwordEncoder, accounts, mfaChallenges));
         extraProviders.orderedStream().forEach(providers::add);
         return new ProviderManager(providers);
     }
