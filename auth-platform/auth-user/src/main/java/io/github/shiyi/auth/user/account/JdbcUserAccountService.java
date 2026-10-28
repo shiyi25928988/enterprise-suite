@@ -14,14 +14,14 @@ import io.github.shiyi.auth.user.mapper.SysUserMapper;
 /**
  * JDBC implementation: audit rows, fail counter, auto-lock after 5 failures.
  */
-class JdbcUserAccountService implements UserAccountService {
+public class JdbcUserAccountService implements UserAccountService {
 
     static final int MAX_FAIL_COUNT = 5;
 
     private final SysUserMapper userMapper;
     private final SysLoginLogMapper loginLogMapper;
 
-    JdbcUserAccountService(SysUserMapper userMapper, SysLoginLogMapper loginLogMapper) {
+    public JdbcUserAccountService(SysUserMapper userMapper, SysLoginLogMapper loginLogMapper) {
         this.userMapper = userMapper;
         this.loginLogMapper = loginLogMapper;
     }

@@ -38,7 +38,7 @@
     <dependencyManagement>
         <dependencies>
 
-            <!-- ---- 内部模块 ---- -->
+            <!-- 内部模块 -->
             <dependency>
                 <groupId>io.github.shiyi</groupId>
                 <artifactId>auth-common</artifactId>
@@ -50,7 +50,7 @@
                 <version>${auth-user.version}</version>
             </dependency>
 
-            <!-- ---- MyBatis-Plus（BOM 方式；Boot 4 官方 starter 已发布，已验证存在） ---- -->
+            <!-- MyBatis-Plus（BOM 方式；Boot 4 官方 starter 已发布，已验证存在） -->
             <dependency>
                 <groupId>com.baomidou</groupId>
                 <artifactId>mybatis-plus-bom</artifactId>
@@ -59,7 +59,7 @@
                 <scope>import</scope>
             </dependency>
 
-            <!-- ---- MapStruct ---- -->
+            <!-- MapStruct -->
             <dependency>
                 <groupId>org.mapstruct</groupId>
                 <artifactId>mapstruct</artifactId>
@@ -71,7 +71,7 @@
                 <version>${mapstruct.version}</version>
             </dependency>
 
-            <!-- ---- OpenAPI 文档 ---- -->
+            <!-- OpenAPI 文档 -->
             <dependency>
                 <groupId>org.springdoc</groupId>
                 <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>

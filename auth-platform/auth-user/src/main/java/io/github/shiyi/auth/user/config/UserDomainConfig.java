@@ -18,6 +18,7 @@ import io.github.shiyi.auth.user.account.InMemoryUserAccountService;
 import io.github.shiyi.auth.user.account.JdbcUserAccountService;
 import io.github.shiyi.auth.user.account.UserAccountService;
 import io.github.shiyi.auth.user.dto.OrgDTO;
+import io.github.shiyi.auth.user.dto.RoleRequest;
 import io.github.shiyi.auth.user.entity.SysRole;
 import io.github.shiyi.auth.user.mapper.SysLoginLogMapper;
 import io.github.shiyi.auth.user.mapper.SysOrgMapper;

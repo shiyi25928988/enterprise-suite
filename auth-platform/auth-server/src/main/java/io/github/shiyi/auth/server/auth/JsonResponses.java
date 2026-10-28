@@ -15,12 +15,12 @@ import io.github.shiyi.auth.common.api.ApiResult;
 /**
  * Small helper for writing {@link ApiResult} JSON in servlet handlers.
  */
-final class JsonResponses {
+final public class JsonResponses {
 
     private JsonResponses() {
     }
 
-    static void write(HttpServletResponse response, ObjectMapper objectMapper,
+    public static void write(HttpServletResponse response, ObjectMapper objectMapper,
                       HttpStatus status, ApiResult<?> body) throws IOException {
         response.setStatus(status.value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);

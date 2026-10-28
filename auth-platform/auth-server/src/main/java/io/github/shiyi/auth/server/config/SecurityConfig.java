@@ -19,12 +19,13 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.factory.PasswordEncoderFactories;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.security.oauth2.server.authorization.config.annotation.web.configurer.OAuth2AuthorizationServerConfigurer;
+import org.springframework.security.config.annotation.web.configurers.oauth2.server.authorization.OAuth2AuthorizationServerConfigurer;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.authentication.LoginUrlAuthenticationEntryPoint;
 import org.springframework.security.web.authentication.logout.LogoutSuccessHandler;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfTokenRepository;
 import org.springframework.security.web.util.matcher.MediaTypeRequestMatcher;
 
 import io.github.shiyi.auth.common.api.ApiResult;
@@ -58,8 +59,8 @@ public class SecurityConfig {
     @Bean
     @Order(1)
     SecurityFilterChain authorizationServerSecurityFilterChain(HttpSecurity http) throws Exception {
-        OAuth2AuthorizationServerConfigurer authorizationServer =
-                OAuth2AuthorizationServerConfigurer.authorizationServer();
+        // Security 7: no static factory any more, the configurer is instantiated directly.
+        OAuth2AuthorizationServerConfigurer authorizationServer = new OAuth2AuthorizationServerConfigurer();
 
         http.securityMatcher(authorizationServer.getEndpointsMatcher())
             .with(authorizationServer, configurer -> configurer.oidc(Customizer.withDefaults()))
@@ -76,7 +77,8 @@ public class SecurityConfig {
     @Order(2)
     SecurityFilterChain apiSecurityFilterChain(HttpSecurity http,
                                                ObjectMapper objectMapper,
-                                               AuthenticationManager authenticationManager) throws Exception {
+                                               AuthenticationManager authenticationManager,
+                                               CsrfTokenRepository csrfTokenRepository) throws Exception {
         http.securityMatcher("/api/**")
             .authorizeHttpRequests(authorize -> authorize
                     .requestMatchers("/api/auth/csrf", "/api/auth/login",
@@ -84,7 +86,7 @@ public class SecurityConfig {
                             "/api/auth/mfa/verify").permitAll()
                     .anyRequest().authenticated())
             .csrf(csrf -> csrf
-                    .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
+                    .csrfTokenRepository(csrfTokenRepository)
                     .csrfTokenRequestHandler(new SpaCsrfTokenRequestHandler()))
             .exceptionHandling(e -> e.authenticationEntryPoint((request, response, authException) ->
                     JsonResponses.write(response, objectMapper, HttpStatus.UNAUTHORIZED,
@@ -104,6 +106,8 @@ public class SecurityConfig {
     SecurityFilterChain defaultSecurityFilterChain(HttpSecurity http) throws Exception {
         http.authorizeHttpRequests(authorize -> authorize
                 .requestMatchers("/login", "/error", "/assets/**").permitAll()
+                // probe endpoints: liveness/readiness must not require a session
+                .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info").permitAll()
                 .anyRequest().authenticated())
             .formLogin(Customizer.withDefaults());
         return http.build();
@@ -124,6 +128,12 @@ public class SecurityConfig {
             request.getSession().invalidate();
             JsonResponses.write(response, objectMapper, HttpStatus.OK, ApiResult.ok());
         };
+    }
+
+    /** Shared with AuthController so the JSON payload and the cookie carry the same value. */
+    @Bean
+    CsrfTokenRepository csrfTokenRepository() {
+        return CookieCsrfTokenRepository.withHttpOnlyFalse();
     }
 
     @Bean

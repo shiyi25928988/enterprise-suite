@@ -29,7 +29,7 @@ Dependency direction is enforced at compile time: `auth-server → auth-user →
 ## Quick start
 
 ```bash
-# Requirements: JDK 21, Maven 3.9+
+# Requirements: JDK 21, Maven 3.9+, Node 20+ (frontend only)
 mvn clean package -DskipTests
 
 # Option A: in-memory mode (zero external dependencies, dev/demo)
@@ -48,6 +48,27 @@ Then:
 
 Demo OIDC client registered for local testing: `mes-web` (public client, PKCE required),
 redirect URI `http://localhost:8081/callback` (the Vite dev server port).
+
+### Verified build (2026-10-28)
+
+Built and smoke-tested against JDK 21.0.12 + Maven 3.9.16 + Boot 4.1.2 / Security 7.1.2:
+
+| Check | Result |
+|---|---|
+| `mvn clean package -DskipTests` | BUILD SUCCESS (5 modules, 38 MB fat jar) |
+| `npm install && npm run build` | 110 modules, main bundle 165 KB |
+| Boot in memory mode | started in ~8 s on :9000 |
+| `/.well-known/openid-configuration`, `/oauth2/jwks` | 200 |
+| `/actuator/health` (liveness/readiness) | 200 `UP`, unauthenticated |
+| JSON login `admin/admin123` → `/api/auth/me` | 200, authorities `[ROLE_ADMIN]` |
+| Wrong password / no session | 401 `40101` / `40100` |
+| Non-admin on `/api/v1/users` | 403 `40300` |
+| Full OIDC: authorize → consent → code → token (PKCE S256) | 200, `id_token` carries `auth_time` |
+| Logout | session invalidated, subsequent `/me` → 401 |
+
+Not exercised (needs external infrastructure): JDBC profile (MySQL 8 + Flyway
+migrations), AD/LDAP and WeCom providers (disabled by default).
+
 
 ### Frontend SPA (auth-web)
 

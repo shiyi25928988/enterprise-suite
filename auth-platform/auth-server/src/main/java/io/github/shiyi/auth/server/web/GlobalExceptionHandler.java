@@ -5,6 +5,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -38,6 +39,16 @@ public class GlobalExceptionHandler {
                 .findFirst()
                 .orElse(ErrorCode.BAD_REQUEST.message());
         return ResponseEntity.badRequest().body(ApiResult.fail(ErrorCode.BAD_REQUEST, msg));
+    }
+
+    /**
+     * Method-security denials ({@code @PreAuthorize}) surface as
+     * {@code AuthorizationDeniedException} (a subclass of AccessDeniedException).
+     * Without this handler the generic fallback turns a 403 into a 500.
+     */
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ApiResult<Void>> handleAccessDenied(AccessDeniedException e) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResult.fail(ErrorCode.FORBIDDEN));
     }
 
     @ExceptionHandler(Exception.class)

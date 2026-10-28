@@ -78,8 +78,10 @@ public class PlatformAuthenticationProvider implements AuthenticationProvider {
 
         accounts.onLoginSuccess("PASSWORD", username, userIdOf(user), ip, userAgent);
 
+        // SAS 7 requires an authentication factor (source of the auth_time claim).
         return UsernamePasswordAuthenticationToken.authenticated(
-                user, null, user.getAuthorities());
+                user, null,
+                AuthenticationFactors.of(user, AuthenticationFactors.PASSWORD));
     }
 
     private Long userIdOf(UserDetails user) {

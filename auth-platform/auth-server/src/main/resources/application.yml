@@ -41,3 +41,19 @@ auth:
     # agent-id: "1000002"
     # secret: ${WECOM_SECRET}
     # redirect-uri: ""   # defaults to {origin}/wecom-callback
+
+---
+# Demo / in-memory mode (no "jdbc" profile): the JDBC driver is on the classpath,
+# so Boot's DataSource auto-configuration would demand a URL and fail the context.
+# Keep it out of the way — PersistenceConfig then wires the in-memory fallbacks.
+# All other JDBC-related auto-configurations back off on their own because no
+# DataSource bean exists.
+spring:
+  config:
+    activate:
+      on-profile: "!jdbc"
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration
+      - org.springframework.boot.jdbc.autoconfigure.DataSourceTransactionManagerAutoConfiguration
+      - org.springframework.boot.jdbc.autoconfigure.JdbcTemplateAutoConfiguration

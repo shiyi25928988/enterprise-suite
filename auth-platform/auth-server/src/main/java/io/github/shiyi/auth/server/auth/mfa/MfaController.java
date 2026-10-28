@@ -88,8 +88,13 @@ public class MfaController {
         accounts.onLoginSuccess("PASSWORD+TOTP", account.username(), account.id(),
                 clientIp(request), request.getHeader("User-Agent"));
 
-        Authentication authentication = UsernamePasswordAuthenticationToken
-                .authenticated(user, null, user.getAuthorities());
+        // Both factors are proven at this point: password earlier, TOTP now.
+        Authentication authentication = UsernamePasswordAuthenticationToken.authenticated(
+                user, null,
+                io.github.shiyi.auth.server.auth.AuthenticationFactors.of(
+                        user,
+                        io.github.shiyi.auth.server.auth.AuthenticationFactors.PASSWORD,
+                        io.github.shiyi.auth.server.auth.AuthenticationFactors.TOTP));
         SecurityContext context = SecurityContextHolder.createEmptyContext();
         context.setAuthentication(authentication);
         SecurityContextHolder.setContext(context);

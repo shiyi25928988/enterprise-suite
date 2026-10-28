@@ -75,7 +75,9 @@ public class WeComAuthenticationProvider implements AuthenticationProvider {
         accounts.onLoginSuccess("WECOM", account.username(), account.id(), ip, "n/a");
         log.info("WeCom scan login OK: {} (wecom userid {})", account.username(), wecomUserid);
 
-        return UsernamePasswordAuthenticationToken.authenticated(user, null, user.getAuthorities());
+        return UsernamePasswordAuthenticationToken.authenticated(user, null,
+                io.github.shiyi.auth.server.auth.AuthenticationFactors.of(
+                        user, io.github.shiyi.auth.server.auth.AuthenticationFactors.OTT));
     }
 
     private String remoteAddress(Authentication authentication) {

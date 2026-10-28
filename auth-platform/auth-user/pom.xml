@@ -27,10 +27,30 @@
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
 
+        <!-- 密码编码（PasswordEncoder）与方法级鉴权注解（@PreAuthorize）。
+             只引 core，不引 security starter：本模块不承载过滤器链。 -->
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-core</artifactId>
+        </dependency>
+
+        <!-- Bean Validation：请求体约束（@NotBlank / @Size / @Pattern） -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+
         <!-- MyBatis-Plus（Boot 4 适配版，版本由 auth-platform dependencyManagement 管理） -->
         <dependency>
             <groupId>com.baomidou</groupId>
             <artifactId>mybatis-plus-spring-boot4-starter</artifactId>
+        </dependency>
+
+        <!-- 分页插件：3.5.9 起 PaginationInnerInterceptor 从 extension 拆出到此模块，
+             不引它 selectPage() 无法编译（运行时也不会真正分页） -->
+        <dependency>
+            <groupId>com.baomidou</groupId>
+            <artifactId>mybatis-plus-jsqlparser</artifactId>
         </dependency>
     </dependencies>
 

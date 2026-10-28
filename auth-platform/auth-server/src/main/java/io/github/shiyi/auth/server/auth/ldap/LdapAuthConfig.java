@@ -110,7 +110,9 @@ public class LdapAuthConfig {
                     ip, "n/a");
 
             return UsernamePasswordAuthenticationToken.authenticated(
-                    user, adResult.getCredentials(), user.getAuthorities());
+                    user, adResult.getCredentials(),
+                    io.github.shiyi.auth.server.auth.AuthenticationFactors.of(
+                            user, io.github.shiyi.auth.server.auth.AuthenticationFactors.PASSWORD));
         }
 
         @Override

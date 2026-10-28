@@ -15,7 +15,7 @@ import org.springframework.security.web.authentication.AbstractAuthenticationPro
 import org.springframework.security.web.authentication.AuthenticationFailureHandler;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
-import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
+import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
 
 /**
  * Accepts {@code POST /api/auth/login} with a JSON body
@@ -29,8 +29,9 @@ import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
  */
 public class JsonUsernamePasswordFilter extends AbstractAuthenticationProcessingFilter {
 
-    private static final AntPathRequestMatcher MATCHER =
-            new AntPathRequestMatcher("/api/auth/login", HttpMethod.POST.name());
+    // Security 7 removed AntPathRequestMatcher; PathPatternRequestMatcher is the replacement.
+    private static final PathPatternRequestMatcher MATCHER =
+            PathPatternRequestMatcher.pathPattern(HttpMethod.POST, "/api/auth/login");
 
     private final ObjectMapper objectMapper;
 

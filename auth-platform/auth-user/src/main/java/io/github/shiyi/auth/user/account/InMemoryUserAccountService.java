@@ -11,12 +11,12 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 /**
  * In-memory fallback (no DataSource). Same seed accounts as the skeleton stage.
  */
-class InMemoryUserAccountService implements UserAccountService {
+public class InMemoryUserAccountService implements UserAccountService {
 
     private final Map<String, UserAccount> users = new ConcurrentHashMap<>();
     private final Map<Long, List<String>> roles = new ConcurrentHashMap<>();
 
-    InMemoryUserAccountService() {
+    public InMemoryUserAccountService() {
         PasswordEncoder encoder = PasswordEncoderFactories.createDelegatingPasswordEncoder();
         users.put("admin", new UserAccount(1L, "admin",
                 encoder.encode("admin123"), "Administrator", 1, false, null));

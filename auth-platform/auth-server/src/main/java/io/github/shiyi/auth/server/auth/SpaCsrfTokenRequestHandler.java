@@ -22,7 +22,7 @@ import org.springframework.util.StringUtils;
  *
  * <p>See https://docs.spring.io/spring-security/reference/servlet/exploits/csrf.html</p>
  */
-final class SpaCsrfTokenRequestHandler extends CsrfTokenRequestAttributeHandler
+final public class SpaCsrfTokenRequestHandler extends CsrfTokenRequestAttributeHandler
         implements CsrfTokenRequestHandler {
 
     private final CsrfTokenRequestHandler delegate = new XorCsrfTokenRequestAttributeHandler();

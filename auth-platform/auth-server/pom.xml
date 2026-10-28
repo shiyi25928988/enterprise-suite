@@ -55,6 +55,12 @@
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-mysql</artifactId>
         </dependency>
+        <!-- Boot 4 将 Flyway 自动配置从 spring-boot-autoconfigure 拆成独立模块，
+             不引它则 V1/V2/V3/V4 脚本在 jdbc profile 下不会自动执行 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-flyway</artifactId>
+        </dependency>
 
         <!-- M5: AD/LDAP 认证（条件装配 auth.ldap.enabled=true 时生效） -->
         <dependency>
