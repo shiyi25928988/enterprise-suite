@@ -6,7 +6,7 @@ import { orgTree, createOrg, updateOrg, deleteOrg } from '../../api/admin'
 
 const tree = ref([])
 const error = ref('')
-const TYPES = { 1: '公司', 2: '厂区', 3: '车间', 4: '工段/产线', 9: '部门' }
+const TYPES = { 1: '公司', 2: '厂区', 3: '车间', 4: '工段/产线', 5: '部门' }
 
 async function load() {
   error.value = ''
@@ -85,7 +85,7 @@ onMounted(load)
       </button>
     </div>
     <p v-if="error" class="error">{{ error }}</p>
-    <p class="muted">类型：1 公司 / 2 厂区 / 3 车间 / 4 工段-产线 / 9 部门（制造层级建议按此编码）</p>
+    <p class="muted">类型：1 公司 / 2 厂区 / 3 车间 / 4 工段-产线 / 5 部门（制造层级建议按此编码，层级上限 10）</p>
 
     <ul class="tree">
       <OrgNode v-for="n in tree" :key="n.id" :node="n"

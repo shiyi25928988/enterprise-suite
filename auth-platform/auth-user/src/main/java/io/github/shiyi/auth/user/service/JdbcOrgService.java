@@ -23,6 +23,14 @@ import org.springframework.transaction.annotation.Transactional;
  */
 public class JdbcOrgService implements OrgService {
 
+    /**
+     * Business cap on org hierarchy depth. The schema itself allows far more
+     * (org_path VARCHAR(512) ≈ 70+ levels with typical ids), but deep trees
+     * are a management smell and bloat subtree LIKE scans — 10 is plenty for
+     * company → plant → workshop → line → section granularity.
+     */
+    public static final int MAX_DEPTH = 10;
+
     private final SysOrgMapper orgMapper;
     private final SysUserMapper userMapper;
 
@@ -58,10 +66,17 @@ public class JdbcOrgService implements OrgService {
         }
 
         SysOrg parent = null;
+        String parentPath = "/";
         if (parentId != null && parentId != 0) {
             parent = orgMapper.selectById(parentId);
             if (parent == null) {
                 throw new BizException(ErrorCode.NOT_FOUND, "parent org not found: " + parentId);
+            }
+            parentPath = parent.getOrgPath();
+            int parentDepth = parentPath.split("/", -1).length - 2; // "/1/5/" → 2
+            if (parentDepth + 1 > MAX_DEPTH) {
+                throw new BizException(ErrorCode.BAD_REQUEST,
+                        "org hierarchy exceeds max depth " + MAX_DEPTH);
             }
         }
 
@@ -74,7 +89,6 @@ public class JdbcOrgService implements OrgService {
         org.setStatus(1);
         orgMapper.insert(org);
 
-        String parentPath = parent == null ? "/" : parent.getOrgPath();
         org.setOrgPath(parentPath + org.getId() + "/");
         orgMapper.updateById(org);
         return toDto(org);
