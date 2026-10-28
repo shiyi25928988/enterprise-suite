@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+    <modelVersion>4.0.0</modelVersion>
+
+    <!-- 根 POM：继承 Boot 父 POM，统一 JDK/编码/插件环境；具体依赖管理下沉到组件 POM -->
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>4.1.2</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>io.github.shiyi</groupId>
+    <artifactId>enterprise-suite</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+    <name>enterprise-suite</name>
+    <description>Enterprise Suite - unified authentication platform and enterprise components</description>
+
+    <!-- 后续新组件（如 workflow-platform、report-platform）在此并列 -->
+    <modules>
+        <module>auth-platform</module>
+    </modules>
+
+    <properties>
+        <java.version>21</java.version>
+        <maven.compiler.release>21</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+        <maven.compiler.parameters>true</maven.compiler.parameters>
+    </properties>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <!-- 构建环境保护：JDK / Maven 版本不符直接失败 -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-enforcer-plugin</artifactId>
+                    <executions>
+                        <execution>
+                            <id>enforce-build-env</id>
+                            <goals>
+                                <goal>enforce</goal>
+                            </goals>
+                            <configuration>
+                                <rules>
+                                    <requireJavaVersion>
+                                        <version>[21,22)</version>
+                                        <message>This project requires JDK 21. Check JAVA_HOME.</message>
+                                    </requireJavaVersion>
+                                    <requireMavenVersion>
+                                        <version>[3.9.0,)</version>
+                                    </requireMavenVersion>
+                                    <banDuplicatePomDependencyVersions/>
+                                </rules>
+                                <fail>true</fail>
+                            </configuration>
+                        </execution>
+                    </executions>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>
