@@ -79,7 +79,8 @@ public class SecurityConfig {
                                                AuthenticationManager authenticationManager) throws Exception {
         http.securityMatcher("/api/**")
             .authorizeHttpRequests(authorize -> authorize
-                    .requestMatchers("/api/auth/csrf", "/api/auth/login").permitAll()
+                    .requestMatchers("/api/auth/csrf", "/api/auth/login",
+                            "/api/auth/wecom/config", "/api/auth/wecom/login").permitAll()
                     .anyRequest().authenticated())
             .csrf(csrf -> csrf
                     .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
@@ -130,14 +131,18 @@ public class SecurityConfig {
     }
 
     /**
-     * Provider registry: add LDAP / WeCom-QR / badge-QR providers here in M5
-     * without touching the filter chains.
+     * Provider registry: the password provider is always present; conditional
+     * M5 providers (LDAP/AD, WeCom QR) are picked up from the context when
+     * their properties enable them (auth.ldap.enabled / auth.wecom.enabled).
      */
     @Bean
     AuthenticationManager authenticationManager(PlatformUserDetailsService userDetailsService,
                                                 PasswordEncoder passwordEncoder,
-                                                io.github.shiyi.auth.user.account.UserAccountService accounts) {
-        return new ProviderManager(
-                new PlatformAuthenticationProvider(userDetailsService, passwordEncoder, accounts));
+                                                io.github.shiyi.auth.user.account.UserAccountService accounts,
+                                                org.springframework.beans.factory.ObjectProvider<org.springframework.security.authentication.AuthenticationProvider> extraProviders) {
+        var providers = new java.util.ArrayList<org.springframework.security.authentication.AuthenticationProvider>();
+        providers.add(new PlatformAuthenticationProvider(userDetailsService, passwordEncoder, accounts));
+        extraProviders.orderedStream().forEach(providers::add);
+        return new ProviderManager(providers);
     }
 }

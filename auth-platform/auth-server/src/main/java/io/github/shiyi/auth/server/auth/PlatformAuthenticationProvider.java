@@ -47,26 +47,26 @@ public class PlatformAuthenticationProvider implements AuthenticationProvider {
             user = userDetailsService.loadUserByUsername(username);
         } catch (org.springframework.security.core.userdetails.UsernameNotFoundException e) {
             // Do NOT reveal whether the account exists: same error for both cases.
-            accounts.onLoginFailure(username, null, "user not found", ip, userAgent);
+            accounts.onLoginFailure("PASSWORD", username, null, "user not found", ip, userAgent);
             throw new BadCredentialsException("Invalid username or password");
         }
 
         if (!passwordEncoder.matches(password, user.getPassword())) {
-            boolean justLocked = accounts.onLoginFailure(username, userIdOf(user),
+            boolean justLocked = accounts.onLoginFailure("PASSWORD", username, userIdOf(user),
                     "bad credentials", ip, userAgent);
             throw new BadCredentialsException(justLocked
                     ? "Account locked after too many failed attempts"
                     : "Invalid username or password");
         }
         if (!user.isEnabled()) {
-            accounts.onLoginFailure(username, userIdOf(user), "account disabled", ip, userAgent);
+            accounts.onLoginFailure("PASSWORD", username, userIdOf(user), "account disabled", ip, userAgent);
             throw new DisabledException("Account disabled");
         }
         if (!user.isAccountNonLocked()) {
             throw new LockedException("Account locked");
         }
 
-        accounts.onLoginSuccess(username, userIdOf(user), ip, userAgent);
+        accounts.onLoginSuccess("PASSWORD", username, userIdOf(user), ip, userAgent);
 
         return UsernamePasswordAuthenticationToken.authenticated(
                 user, null, user.getAuthorities());

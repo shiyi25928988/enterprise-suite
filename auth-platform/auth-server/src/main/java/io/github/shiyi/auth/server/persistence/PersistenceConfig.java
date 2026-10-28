@@ -65,10 +65,10 @@ public class PersistenceConfig {
     @ConditionalOnMissingBean(RegisteredClientRepository.class)
     RegisteredClientRepository inMemoryRegisteredClientRepository() {
         log.warn("No DataSource configured - using IN-MEMORY RegisteredClientRepository (dev/demo only)");
-        return new InMemoryRegisteredClientRepository(demoMesWebClient());
+        return new InMemoryRegisteredClientRepository(demoMesWebClient(), demoMesScreenClient());
     }
 
-    /** Seeds the demo client into JDBC storage on first boot (idempotent). */
+    /** Seeds the demo clients into JDBC storage on first boot (idempotent). */
     @Bean
     @ConditionalOnBean(javax.sql.DataSource.class)
     ApplicationRunner demoClientSeeder(RegisteredClientRepository repository) {
@@ -76,6 +76,10 @@ public class PersistenceConfig {
             if (repository.findByClientId("mes-web") == null) {
                 repository.save(demoMesWebClient());
                 log.info("Seeded demo client 'mes-web' into oauth2_registered_client");
+            }
+            if (repository.findByClientId("mes-screen") == null) {
+                repository.save(demoMesScreenClient());
+                log.info("Seeded demo client 'mes-screen' into oauth2_registered_client");
             }
         };
     }
@@ -98,6 +102,30 @@ public class PersistenceConfig {
                 .tokenSettings(TokenSettings.builder()
                         .accessTokenTimeToLive(Duration.ofMinutes(30))
                         .reuseRefreshTokens(false)   // refresh token rotation
+                        .build())
+                .build();
+    }
+
+    /**
+     * Workshop display / shared terminal client (M5): OAuth 2.1 Device
+     * Authorization Grant — the screen shows a code + verification URI, the
+     * worker completes the login on their phone. Long-lived read-only token.
+     */
+    static RegisteredClient demoMesScreenClient() {
+        return RegisteredClient.withId(UUID.randomUUID().toString())
+                .clientId("mes-screen")
+                .clientAuthenticationMethod(ClientAuthenticationMethod.NONE)
+                .authorizationGrantType(AuthorizationGrantType.DEVICE_CODE)
+                .authorizationGrantType(AuthorizationGrantType.REFRESH_TOKEN)
+                .scope(OidcScopes.OPENID)
+                .scope(OidcScopes.PROFILE)
+                .clientSettings(ClientSettings.builder()
+                        .requireAuthorizationConsent(true)
+                        .build())
+                .tokenSettings(TokenSettings.builder()
+                        .accessTokenTimeToLive(Duration.ofHours(8))   // shift-long screen token
+                        .deviceCodeTimeToLive(Duration.ofMinutes(10))
+                        .reuseRefreshTokens(false)
                         .build())
                 .build();
     }

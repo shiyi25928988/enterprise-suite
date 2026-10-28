@@ -56,6 +56,12 @@
             <artifactId>flyway-mysql</artifactId>
         </dependency>
 
+        <!-- M5: AD/LDAP 认证（条件装配 auth.ldap.enabled=true 时生效） -->
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-ldap</artifactId>
+        </dependency>
+
         <!-- Redis / Spring Session：M6 集群阶段启用，避免无 Redis 环境下 Session 自动装配失效
         <dependency>
             <groupId>org.springframework.boot</groupId>

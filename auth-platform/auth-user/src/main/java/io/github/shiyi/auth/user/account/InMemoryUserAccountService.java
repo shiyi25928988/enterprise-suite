@@ -32,18 +32,24 @@ class InMemoryUserAccountService implements UserAccountService {
     }
 
     @Override
+    public Optional<UserAccount> findForWecomLogin(String wecomUserid) {
+        // in-memory fallback: treat the WeCom userid as the username
+        return findByUsername(wecomUserid);
+    }
+
+    @Override
     public List<String> findRoleCodes(Long userId) {
         return roles.getOrDefault(userId, List.of());
     }
 
     @Override
-    public void onLoginSuccess(String username, Long userId, String ip, String userAgent) {
+    public void onLoginSuccess(String loginType, String username, Long userId, String ip, String userAgent) {
         // no-op in memory mode
     }
 
     @Override
-    public boolean onLoginFailure(String username, Long userId, String failReason,
-                                  String ip, String userAgent) {
+    public boolean onLoginFailure(String loginType, String username, Long userId,
+                                  String failReason, String ip, String userAgent) {
         return false;
     }
 }

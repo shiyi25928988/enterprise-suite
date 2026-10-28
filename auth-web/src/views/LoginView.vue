@@ -3,6 +3,7 @@ import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { startOidcLogin } from '../api/oidc'
+import http from '../api/http'
 
 const auth = useAuthStore()
 const route = useRoute()
@@ -12,11 +13,37 @@ const username = ref('')
 const password = ref('')
 const error = ref('')
 const loading = ref(false)
+const wecomEnabled = ref(false)
 
-onMounted(() => {
+onMounted(async () => {
   // refresh CSRF material silently on the login page
   auth.bootstrap().catch(() => {})
+  // WeCom QR login is feature-flagged server-side
+  try {
+    const cfg = await http.get('/api/auth/wecom/config').then((r) => r.data?.data)
+    wecomEnabled.value = !!cfg?.enabled
+    wecomConfig.value = cfg
+  } catch { /* ignore */ }
 })
+
+const wecomConfig = ref(null)
+
+async function startWecomLogin() {
+  const cfg = wecomConfig.value || {}
+  const redirectUri = cfg.redirectUri || `${window.location.origin}/wecom-callback`
+  const state = btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(12))))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+  sessionStorage.setItem('wecom.state', state)
+  const params = new URLSearchParams({
+    login_type: 'CorpApp',
+    appid: cfg.corpId,
+    agentid: cfg.agentId,
+    redirect_uri: redirectUri,
+    state,
+  })
+  window.location.assign(
+    `https://login.work.weixin.qq.com/wwlogin/sso/login?${params}`)
+}
 
 async function submit() {
   error.value = ''
@@ -52,6 +79,9 @@ function mapError(e) {
       <input v-model="password" type="password" autocomplete="current-password" required />
       <button type="submit" :disabled="loading">
         {{ loading ? '登录中…' : '登 录' }}
+      </button>
+      <button v-if="wecomEnabled" type="button" class="secondary" @click="startWecomLogin">
+        企业微信扫码登录
       </button>
       <button type="button" class="secondary" @click="startOidcLogin()">
         OIDC 授权码流程（SSO 演示）

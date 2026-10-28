@@ -44,17 +44,40 @@ class JdbcUserAccountService implements UserAccountService {
     }
 
     @Override
-    public void onLoginSuccess(String username, Long userId, String ip, String userAgent) {
+    public Optional<UserAccount> findForWecomLogin(String wecomUserid) {
+        com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<SysUser> byWecom =
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<SysUser>()
+                        .eq(SysUser::getWecomUserid, wecomUserid);
+        SysUser user = userMapper.selectOne(byWecom);
+        if (user == null) {
+            // auto-bind: WeCom userid matching an existing username (first login)
+            SysUser candidate = userMapper.selectOne(
+                    new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<SysUser>()
+                            .eq(SysUser::getUsername, wecomUserid));
+            if (candidate == null) {
+                return Optional.empty();
+            }
+            userMapper.update(null, new LambdaUpdateWrapper<SysUser>()
+                    .eq(SysUser::getId, candidate.getId())
+                    .set(SysUser::getWecomUserid, wecomUserid));
+            user = candidate;
+        }
+        return Optional.of(new UserAccount(user.getId(), user.getUsername(),
+                user.getPassword(), user.getRealName(), user.getStatus()));
+    }
+
+    @Override
+    public void onLoginSuccess(String loginType, String username, Long userId, String ip, String userAgent) {
         userMapper.update(null, new LambdaUpdateWrapper<SysUser>()
                 .eq(SysUser::getUsername, username)
                 .set(SysUser::getFailCount, 0)
                 .set(SysUser::getLastLoginTime, LocalDateTime.now()));
-        record(username, userId, true, null, ip, userAgent);
+        record(loginType, username, userId, true, null, ip, userAgent);
     }
 
     @Override
-    public boolean onLoginFailure(String username, Long userId, String failReason,
-                                  String ip, String userAgent) {
+    public boolean onLoginFailure(String loginType, String username, Long userId,
+                                  String failReason, String ip, String userAgent) {
         userMapper.update(null, new LambdaUpdateWrapper<SysUser>()
                 .eq(SysUser::getUsername, username)
                 .setSql("fail_count = fail_count + 1"));
@@ -71,16 +94,16 @@ class JdbcUserAccountService implements UserAccountService {
                     .set(SysUser::getStatus, 2));
             locked = true;
         }
-        record(username, userId, false, failReason, ip, userAgent);
+        record(loginType, username, userId, false, failReason, ip, userAgent);
         return locked;
     }
 
-    private void record(String username, Long userId, boolean success, String failReason,
-                        String ip, String userAgent) {
+    private void record(String loginType, String username, Long userId, boolean success,
+                        String failReason, String ip, String userAgent) {
         SysLoginLog log = new SysLoginLog();
         log.setUsername(username);
         log.setUserId(userId);
-        log.setLoginType("PASSWORD");
+        log.setLoginType(loginType);
         log.setSuccess(success ? 1 : 0);
         log.setFailReason(failReason);
         log.setIp(ip);

@@ -4,6 +4,7 @@ import { useAuthStore } from '../stores/auth'
 const routes = [
   { path: '/login', name: 'login', component: () => import('../views/LoginView.vue') },
   { path: '/callback', name: 'callback', component: () => import('../views/CallbackView.vue') },
+  { path: '/wecom-callback', name: 'wecom-callback', component: () => import('../views/WecomCallbackView.vue') },
   // The admin console itself is admin-only (also enforced server-side via
   // @PreAuthorize("hasRole('ADMIN')") on every /api/v1/** endpoint).
   {

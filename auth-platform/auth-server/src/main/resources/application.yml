@@ -27,3 +27,17 @@ logging:
   level:
     io.github.shiyi: DEBUG
     org.springframework.security: INFO
+
+# M5 alternative authentication sources — both OFF by default.
+# See LdapAuthConfig / WeComAuthConfig for the full property sets.
+auth:
+  ldap:
+    enabled: false
+    # domain: corp.example.com
+    # url: ldap://dc01.corp.example.com:389
+  wecom:
+    enabled: false
+    # corp-id: ww1234567890
+    # agent-id: "1000002"
+    # secret: ${WECOM_SECRET}
+    # redirect-uri: ""   # defaults to {origin}/wecom-callback

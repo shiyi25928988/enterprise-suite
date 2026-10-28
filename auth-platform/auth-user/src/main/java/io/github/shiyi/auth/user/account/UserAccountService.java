@@ -13,11 +13,18 @@ public interface UserAccountService {
 
     Optional<UserAccount> findByUsername(String username);
 
+    /**
+     * Resolves the account for a WeCom (企业微信) scan login.
+     * Lookup order: by bound wecom_userid, then by username match (auto-binds
+     * on first login — skeleton policy; tighten per HR sync rules later).
+     */
+    Optional<UserAccount> findForWecomLogin(String wecomUserid);
+
     /** Role codes of the user, empty when none. */
     java.util.List<String> findRoleCodes(Long userId);
 
     /** Records a successful login: audit row + clears fail counter + refreshes last_login_time. */
-    void onLoginSuccess(String username, Long userId, String ip, String userAgent);
+    void onLoginSuccess(String loginType, String username, Long userId, String ip, String userAgent);
 
     /**
      * Records a failed login: audit row + increments fail counter.
@@ -25,5 +32,6 @@ public interface UserAccountService {
      *
      * @return true when the account has just been locked
      */
-    boolean onLoginFailure(String username, Long userId, String failReason, String ip, String userAgent);
+    boolean onLoginFailure(String loginType, String username, Long userId,
+                           String failReason, String ip, String userAgent);
 }

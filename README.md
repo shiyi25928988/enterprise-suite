@@ -77,7 +77,10 @@ so browser traffic is same-origin — the same topology as production.
       authorization-code + PKCE demo (in-memory tokens only)
 - [x] M4b admin console: users (paged CRUD, roles, reset password, status),
       org tree, roles management
-- [ ] M5 manufacturing: WeCom scan login, device flow, kick-off-line
+- [x] M5a auth sources: AD/LDAP provider (auth.ldap.*), WeCom QR scan login
+      (auth.wecom.*, auto-bind on first login), device-flow demo client
+      `mes-screen` (8h token for workshop displays)
+- [ ] M5b: DingTalk, badge QR, MFA, per-device token policies
 - [ ] M6 hardening: load test (500+ TPS), audit reports, monitoring
 
 See the [development doc](docs/) (Chinese) for the full specification.
