@@ -11,6 +11,14 @@ export const useAuthStore = defineStore('auth', {
     tokens: null,     // { access_token, id_token, refresh_token } — memory only
     loaded: false,
   }),
+  getters: {
+    /** Console access requires ROLE_ADMIN (seeded role code: ADMIN). */
+    isAdmin: (state) =>
+      (state.user?.authorities || []).some((a) => {
+        const name = typeof a === 'string' ? a : a?.authority
+        return name === 'ROLE_ADMIN' || name === 'ADMIN'
+      }),
+  },
   actions: {
     async bootstrap() {
       await ensureCsrf().catch(() => {})

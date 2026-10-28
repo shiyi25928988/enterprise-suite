@@ -51,6 +51,11 @@ redirect URI `http://localhost:8081/callback` (the Vite dev server port).
 
 ### Frontend SPA (auth-web)
 
+> Access control: the admin console is restricted to users holding the
+> `ADMIN` role — enforced client-side by the router guard (`/403` fallback)
+> and server-side by `@PreAuthorize("hasRole('ADMIN')")` on every
+> `/api/v1/**` endpoint, reads included.
+
 ```bash
 cd auth-web
 npm install

@@ -33,6 +33,7 @@ public class OrgController {
     }
 
     @GetMapping("/tree")
+    @PreAuthorize("hasRole('ADMIN')")
     public ApiResult<java.util.List<OrgDTO>> tree() {
         return ApiResult.ok(orgService.tree());
     }

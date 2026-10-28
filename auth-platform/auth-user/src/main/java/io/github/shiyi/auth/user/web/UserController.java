@@ -38,6 +38,7 @@ public class UserController {
     }
 
     @GetMapping
+    @PreAuthorize("hasRole('ADMIN')")
     public ApiResult<PageResult<UserDTO>> page(
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size,
@@ -48,6 +49,7 @@ public class UserController {
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     public ApiResult<UserDTO> detail(@PathVariable Long id) {
         return ApiResult.ok(userService.findById(id)
                 .orElseThrow(() -> new io.github.shiyi.auth.common.exception.BizException(

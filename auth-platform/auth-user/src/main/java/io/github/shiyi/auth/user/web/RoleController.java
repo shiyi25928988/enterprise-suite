@@ -34,6 +34,7 @@ public class RoleController {
     }
 
     @GetMapping
+    @PreAuthorize("hasRole('ADMIN')")
     public ApiResult<List<SysRole>> list() {
         return ApiResult.ok(roleService.list());
     }
