@@ -34,6 +34,12 @@ public class SysOrg {
 
     private Integer sortNo;
 
+    /** Directory sync origin: "wecom" / "dingtalk" / null for local orgs */
+    private String externalSource;
+
+    /** Department id inside the external directory (unique per source) */
+    private String externalId;
+
     private Long leaderId;
 
     private Integer status;

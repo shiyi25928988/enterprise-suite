@@ -126,6 +126,41 @@ same workstation, remote database):
   `auth.audit.retention-days` (default 90) are purged daily at
   `auth.audit.cleanup-cron` (default 03:00). No-op in in-memory mode.
 
+### M8: directory sync — WeCom / DingTalk (2026-10-29)
+
+Loosely-coupled SPI (`io.github.shiyi.auth.user.sync.DirectoryProvider`):
+each source is a bean activated **only** by configuration, the orchestrator
+knows nothing about source APIs. Disabled by default — the platform behaves
+exactly as before until you opt in.
+
+```yaml
+auth:
+  sync:
+    cron: "-"                    # scheduled full sync; "-" = off (default)
+    dingtalk:
+      enabled: true
+      app-key: xxx  app-secret: xxx
+      # base-url / token-url / root-name overridable (stub/test friendly)
+    wecom:
+      enabled: true
+      corp-id: xxx  corp-secret: xxx   # contact-sync secret, not agent secret
+```
+
+Mapping rules: orgs matched by `(external_source, external_id)`, org_code =
+`<source>:<extId>`, materialized path computed like local orgs; users matched
+the same way, username = directory userid (collision with a local account is
+skipped with a warning), random unusable password (these accounts log in via
+QR/SSO), WeCom userid mirrored to `wecomUserid` so M5a QR-login auto-binds the
+same account. Parent moves are reported, not applied (subtree path recompute).
+
+Admin API: `GET /api/v1/sync` (sources + last run), `POST /api/v1/sync/{source}`
+(trigger now). JDBC profile required.
+
+Verified E2E against stub DingTalk + WeCom APIs: org trees imported with
+correct materialized paths, users bound to their primary department, re-run is
+idempotent, username conflicts skipped.
+
+
 
 ### Frontend SPA (auth-web)
 
@@ -166,8 +201,10 @@ so browser traffic is same-origin — the same topology as production.
       load verified (3.2k req/s reads, 54 full logins/s, zero failures)
 - [x] M7 monitoring & retention: `deploy/` Grafana + Prometheus compose stack with
       pre-provisioned auth dashboard; daily audit log purge (`auth.audit.*`)
-- [ ] M5c: DingTalk, badge QR, per-device token policies, anomaly detection
-- [ ] M8: HR/AD user sync (needs a reachable AD/HR source), Grafana alert rules
+- [x] M8 directory sync: WeCom + DingTalk org/user import via a config-activated
+      provider SPI; admin trigger API; verified E2E against stub APIs
+- [ ] M5c: DingTalk QR login, badge QR, per-device token policies, anomaly detection
+- [ ] M9: Grafana alert rules, LDAP/HR-CSV providers (same SPI), frontend sync UI
 
 See the [development doc](docs/) (Chinese) for the full specification.
 

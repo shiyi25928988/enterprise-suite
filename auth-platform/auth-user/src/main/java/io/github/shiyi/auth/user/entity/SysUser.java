@@ -40,6 +40,12 @@ public class SysUser {
 
     private String wecomUserid;
 
+    /** Directory sync origin: "wecom" / "dingtalk" / null for local users */
+    private String externalSource;
+
+    /** User id inside the external directory (unique per source) */
+    private String externalId;
+
     /** 1 local 2 LDAP 3 WeCom 4 DingTalk */
     private Integer source;
 
