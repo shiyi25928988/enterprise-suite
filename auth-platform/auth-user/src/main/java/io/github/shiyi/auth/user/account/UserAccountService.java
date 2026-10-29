@@ -29,6 +29,21 @@ public interface UserAccountService {
     /** Clears the TOTP secret and turns the second factor off. */
     void disableMfa(Long userId);
 
+    /**
+     * True when the holder is still on an initial password and must replace it
+     * before the platform lets them work (admin-created, imported, or reset).
+     */
+    boolean mustChangePassword(Long userId);
+
+    /** Compares a raw password with the stored hash. */
+    boolean matchesPassword(Long userId, String rawPassword);
+
+    /**
+     * Stores a new password (encoded), clears the must-change flag, stamps
+     * password_update_time and resets the failure counter.
+     */
+    void changePassword(Long userId, String rawPassword);
+
     /** Records a successful login: audit row + clears fail counter + refreshes last_login_time. */
     void onLoginSuccess(String loginType, String username, Long userId, String ip, String userAgent);
 

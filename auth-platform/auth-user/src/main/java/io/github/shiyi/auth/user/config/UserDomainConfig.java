@@ -93,8 +93,9 @@ public class UserDomainConfig {
     @Bean
     @ConditionalOnProperty(name = "spring.datasource.url")
     UserService jdbcUserService(SysUserMapper userMapper, SysOrgMapper orgMapper,
-                                SysUserRoleMapper userRoleMapper) {
-        return new JdbcUserService(userMapper, orgMapper, userRoleMapper);
+                                SysUserRoleMapper userRoleMapper,
+                                org.springframework.context.ApplicationEventPublisher events) {
+        return new JdbcUserService(userMapper, orgMapper, userRoleMapper, events);
     }
 
     @Bean

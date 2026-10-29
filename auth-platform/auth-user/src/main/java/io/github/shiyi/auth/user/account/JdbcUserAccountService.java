@@ -20,6 +20,9 @@ public class JdbcUserAccountService implements UserAccountService {
 
     private final SysUserMapper userMapper;
     private final SysLoginLogMapper loginLogMapper;
+    private final org.springframework.security.crypto.password.PasswordEncoder encoder =
+            org.springframework.security.crypto.factory.PasswordEncoderFactories
+                    .createDelegatingPasswordEncoder();
 
     public JdbcUserAccountService(SysUserMapper userMapper, SysLoginLogMapper loginLogMapper) {
         this.userMapper = userMapper;
@@ -84,6 +87,30 @@ public class JdbcUserAccountService implements UserAccountService {
                 .eq(SysUser::getId, userId)
                 .set(SysUser::getMfaEnabled, 0)
                 .set(SysUser::getTotpSecret, null));
+    }
+
+    @Override
+    public boolean mustChangePassword(Long userId) {
+        SysUser user = userMapper.selectById(userId);
+        return user != null && user.getMustChangePassword() != null
+                && user.getMustChangePassword() == 1;
+    }
+
+    @Override
+    public boolean matchesPassword(Long userId, String rawPassword) {
+        SysUser user = userMapper.selectById(userId);
+        return user != null && rawPassword != null
+                && encoder.matches(rawPassword, user.getPassword());
+    }
+
+    @Override
+    public void changePassword(Long userId, String rawPassword) {
+        userMapper.update(null, new LambdaUpdateWrapper<SysUser>()
+                .eq(SysUser::getId, userId)
+                .set(SysUser::getPassword, encoder.encode(rawPassword))
+                .set(SysUser::getPasswordUpdateTime, LocalDateTime.now())
+                .set(SysUser::getMustChangePassword, 0)
+                .set(SysUser::getFailCount, 0));
     }
 
     @Override

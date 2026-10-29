@@ -28,6 +28,19 @@ http.interceptors.response.use(
     apiError.code = data?.code
     apiError.status = resp?.status
     apiError.data = data?.data // e.g. {challengeId} on MFA_REQUIRED
+
+    const url = String(error.config?.url || '')
+    // Session gone (expired, or kicked from the console): send the browser back
+    // to the login screen instead of leaving the page stuck on error toasts.
+    if (apiError.status === 401 && !url.includes('/api/auth/login')
+        && !window.location.pathname.startsWith('/login')) {
+      const back = encodeURIComponent(window.location.pathname + window.location.search)
+      window.location.assign(`/login?redirect=${back}`)
+    }
+    // Still on the initial password: the server refuses everything else.
+    if (apiError.code === 40103 && window.location.pathname !== '/password') {
+      window.location.assign('/password')
+    }
     return Promise.reject(apiError)
   },
 )

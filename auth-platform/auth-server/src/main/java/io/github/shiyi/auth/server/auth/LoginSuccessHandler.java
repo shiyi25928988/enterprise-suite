@@ -24,15 +24,21 @@ import org.springframework.security.web.savedrequest.SavedRequest;
 public class LoginSuccessHandler implements AuthenticationSuccessHandler {
 
     private final ObjectMapper objectMapper;
+    private final io.github.shiyi.auth.user.account.UserAccountService accounts;
     private final RequestCache requestCache = new HttpSessionRequestCache();
 
-    public LoginSuccessHandler(ObjectMapper objectMapper) {
+    public LoginSuccessHandler(ObjectMapper objectMapper,
+                               io.github.shiyi.auth.user.account.UserAccountService accounts) {
         this.objectMapper = objectMapper;
+        this.accounts = accounts;
     }
 
     @Override
     public void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response,
                                         Authentication authentication) throws IOException {
+        if (authentication.getPrincipal() instanceof PlatformUser user) {
+            LoginSessionSupport.stamp(request, accounts, user);
+        }
         String target = resolveRedirect(request, response);
 
         response.setStatus(HttpServletResponse.SC_OK);

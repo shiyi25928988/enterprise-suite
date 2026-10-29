@@ -35,13 +35,16 @@ public class WeComAuthController {
 
     private final WeComProperties props;
     private final AuthenticationManager authenticationManager;
+    private final io.github.shiyi.auth.user.account.UserAccountService accounts;
 
     private final SecurityContextRepository securityContextRepository =
             new HttpSessionSecurityContextRepository();
 
-    public WeComAuthController(WeComProperties props, AuthenticationManager authenticationManager) {
+    public WeComAuthController(WeComProperties props, AuthenticationManager authenticationManager,
+                               io.github.shiyi.auth.user.account.UserAccountService accounts) {
         this.props = props;
         this.authenticationManager = authenticationManager;
+        this.accounts = accounts;
     }
 
     @GetMapping("/config")
@@ -78,6 +81,9 @@ public class WeComAuthController {
         context.setAuthentication(authentication);
         SecurityContextHolder.setContext(context);
         securityContextRepository.saveContext(context, request, response);
+        if (authentication.getPrincipal() instanceof io.github.shiyi.auth.server.auth.PlatformUser user) {
+            io.github.shiyi.auth.server.auth.LoginSessionSupport.stamp(request, accounts, user);
+        }
 
         return ResponseEntity.ok(ApiResult.ok(Map.of("redirect", "/")));
     }

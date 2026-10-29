@@ -2,7 +2,7 @@ package io.github.shiyi.auth.server.config;
 
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
-import org.springframework.session.data.redis.config.annotation.web.http.EnableRedisHttpSession;
+import org.springframework.session.data.redis.config.annotation.web.http.EnableRedisIndexedHttpSession;
 
 /**
  * M6: Redis-backed HTTP session cluster storage.
@@ -14,11 +14,16 @@ import org.springframework.session.data.redis.config.annotation.web.http.EnableR
  * so any instance behind a load balancer can serve any request, and rolling
  * restarts no longer log users out.
  *
+ * <p>Uses the <em>indexed</em> variant on purpose: {@code @EnableRedisHttpSession}
+ * registers the plain {@code RedisSessionRepository}, which cannot be queried by
+ * principal name — the online-session console ("who is signed in, kick them")
+ * needs {@link org.springframework.session.FindByIndexNameSessionRepository}.</p>
+ *
  * <p>Session timeout (30m) is set via {@code server.servlet.session.timeout} in
- * application.yml; {@code maxInactiveIntervalInSeconds} here is the fallback.
+ * application.yml; {@code maxInactiveIntervalInSeconds} here is the fallback.</p>
  */
 @Configuration
 @Profile("redis")
-@EnableRedisHttpSession(maxInactiveIntervalInSeconds = 1800)
+@EnableRedisIndexedHttpSession(maxInactiveIntervalInSeconds = 1800)
 public class RedisSessionConfig {
 }

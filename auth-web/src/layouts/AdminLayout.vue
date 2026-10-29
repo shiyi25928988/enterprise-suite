@@ -21,10 +21,12 @@ const menu = computed(() => {
       { to: '/orgs', label: '组织管理' },
       { to: '/roles', label: '角色管理' },
       { to: '/apps', label: '应用接入' },
+      { to: '/sessions', label: '在线会话' },
       { to: '/sync', label: '目录同步' },
       { to: '/security', label: '安全设置' },
     )
   }
+  items.push({ to: '/password', label: '修改密码' })
   return items
 })
 

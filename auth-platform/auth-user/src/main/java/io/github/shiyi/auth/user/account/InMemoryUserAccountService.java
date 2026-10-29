@@ -15,15 +15,39 @@ public class InMemoryUserAccountService implements UserAccountService {
 
     private final Map<String, UserAccount> users = new ConcurrentHashMap<>();
     private final Map<Long, List<String>> roles = new ConcurrentHashMap<>();
+    private final Map<Long, Boolean> mustChange = new ConcurrentHashMap<>();
+    private final PasswordEncoder encoder = PasswordEncoderFactories.createDelegatingPasswordEncoder();
 
     public InMemoryUserAccountService() {
-        PasswordEncoder encoder = PasswordEncoderFactories.createDelegatingPasswordEncoder();
         users.put("admin", new UserAccount(1L, "admin",
                 encoder.encode("admin123"), "Administrator", 1, false, null));
         users.put("zhangsan", new UserAccount(2L, "zhangsan",
                 encoder.encode("Zhang@123"), "Zhang San", 1, false, null));
         roles.put(1L, List.of("ADMIN"));
         roles.put(2L, List.of("USER"));
+    }
+
+    @Override
+    public boolean mustChangePassword(Long userId) {
+        return Boolean.TRUE.equals(mustChange.get(userId));
+    }
+
+    @Override
+    public boolean matchesPassword(Long userId, String rawPassword) {
+        return users.values().stream()
+                .filter(u -> u.id().equals(userId))
+                .findFirst()
+                .map(u -> rawPassword != null && encoder.matches(rawPassword, u.password()))
+                .orElse(false);
+    }
+
+    @Override
+    public void changePassword(Long userId, String rawPassword) {
+        users.replaceAll((k, v) -> v.id().equals(userId)
+                ? new UserAccount(v.id(), v.username(), encoder.encode(rawPassword),
+                        v.realName(), v.status(), v.mfaEnabled(), v.totpSecret())
+                : v);
+        mustChange.remove(userId);
     }
 
     @Override

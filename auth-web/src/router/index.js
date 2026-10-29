@@ -5,6 +5,9 @@ const routes = [
   { path: '/login', name: 'login', component: () => import('../views/LoginView.vue'), meta: { bare: true } },
   { path: '/callback', name: 'callback', component: () => import('../views/CallbackView.vue'), meta: { bare: true } },
   { path: '/wecom-callback', name: 'wecom-callback', component: () => import('../views/WecomCallbackView.vue'), meta: { bare: true } },
+  // standalone page: reachable both voluntarily and when the account still
+  // carries its initial password (the guard forces it)
+  { path: '/password', name: 'password', component: () => import('../views/PasswordView.vue'), meta: { bare: true, requiresAuth: true } },
   // Console: /portal is the employee entry (any authenticated user), the rest is
   // admin-only — also enforced server-side via @PreAuthorize on /api/v1/**.
   {
@@ -17,6 +20,7 @@ const routes = [
       { path: 'orgs', name: 'orgs', component: () => import('../views/admin/OrgView.vue'), meta: { requiresAdmin: true } },
       { path: 'roles', name: 'roles', component: () => import('../views/admin/RolesView.vue'), meta: { requiresAdmin: true } },
       { path: 'apps', name: 'apps', component: () => import('../views/admin/AppsView.vue'), meta: { requiresAdmin: true } },
+      { path: 'sessions', name: 'sessions', component: () => import('../views/admin/SessionsView.vue'), meta: { requiresAdmin: true } },
       { path: 'security', name: 'security', component: () => import('../views/admin/SecurityView.vue'), meta: { requiresAdmin: true } },
       { path: 'sync', name: 'sync', component: () => import('../views/admin/SyncView.vue'), meta: { requiresAdmin: true } },
     ],
@@ -34,6 +38,10 @@ router.beforeEach(async (to) => {
   }
   if (to.meta.requiresAuth && !auth.user) {
     return { name: 'login', query: { redirect: to.fullPath } }
+  }
+  // initial password: nothing but the change-password page until it is replaced
+  if (auth.user?.mustChangePassword && to.name !== 'password') {
+    return { name: 'password' }
   }
   // landing page depends on the role: admins get the console, others the portal
   if (to.path === '/') {

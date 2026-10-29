@@ -59,7 +59,8 @@ public class SecurityConfig {
     @Bean
     @Order(1)
     SecurityFilterChain authorizationServerSecurityFilterChain(
-            HttpSecurity http, io.github.shiyi.auth.server.app.AppAccessFilter appAccessFilter)
+            HttpSecurity http, io.github.shiyi.auth.server.app.AppAccessFilter appAccessFilter,
+            tools.jackson.databind.ObjectMapper objectMapper)
             throws Exception {
         // Security 7: no static factory any more, the configurer is instantiated directly.
         OAuth2AuthorizationServerConfigurer authorizationServer = new OAuth2AuthorizationServerConfigurer();
@@ -71,6 +72,10 @@ public class SecurityConfig {
             // (authentication is already resolved on the returning authorize call)
             // but before the protocol endpoints issue codes.
             .addFilterAfter(appAccessFilter, org.springframework.security.web.context.SecurityContextHolderFilter.class)
+            // An account still on its initial password may not mint codes for any
+            // client — otherwise "must change password" would be UI-only advice.
+            .addFilterAfter(new io.github.shiyi.auth.server.auth.MustChangePasswordFilter(objectMapper),
+                    org.springframework.security.web.context.SecurityContextHolderFilter.class)
             // Unauthenticated browser requests redirect to /login; API clients get 401.
             .exceptionHandling(e -> e.defaultAuthenticationEntryPointFor(
                     new LoginUrlAuthenticationEntryPoint("/login"),
@@ -84,7 +89,9 @@ public class SecurityConfig {
     SecurityFilterChain apiSecurityFilterChain(HttpSecurity http,
                                                ObjectMapper objectMapper,
                                                AuthenticationManager authenticationManager,
-                                               CsrfTokenRepository csrfTokenRepository) throws Exception {
+                                               CsrfTokenRepository csrfTokenRepository,
+                                               io.github.shiyi.auth.user.account.UserAccountService accounts)
+            throws Exception {
         http.securityMatcher("/api/**")
             .authorizeHttpRequests(authorize -> authorize
                     .requestMatchers("/api/auth/csrf", "/api/auth/login",
@@ -101,7 +108,9 @@ public class SecurityConfig {
                     .logoutUrl("/api/auth/logout")
                     .logoutSuccessHandler(jsonLogoutSuccessHandler(objectMapper)))
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
-            .addFilterAt(jsonLoginFilter(objectMapper, authenticationManager),
+            .addFilterAfter(new io.github.shiyi.auth.server.auth.MustChangePasswordFilter(objectMapper),
+                    org.springframework.security.web.context.SecurityContextHolderFilter.class)
+            .addFilterAt(jsonLoginFilter(objectMapper, authenticationManager, accounts),
                     UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }
@@ -130,11 +139,12 @@ public class SecurityConfig {
     }
 
     private JsonUsernamePasswordFilter jsonLoginFilter(ObjectMapper objectMapper,
-                                                       AuthenticationManager authenticationManager) {
+                                                       AuthenticationManager authenticationManager,
+                                                       io.github.shiyi.auth.user.account.UserAccountService accounts) {
         return new JsonUsernamePasswordFilter(
                 authenticationManager,
                 objectMapper,
-                new LoginSuccessHandler(objectMapper),
+                new LoginSuccessHandler(objectMapper, accounts),
                 new LoginFailureHandler(objectMapper));
     }
 

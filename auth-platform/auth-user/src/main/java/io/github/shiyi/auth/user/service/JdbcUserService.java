@@ -34,13 +34,21 @@ public class JdbcUserService implements UserService {
     private final SysUserMapper userMapper;
     private final SysOrgMapper orgMapper;
     private final SysUserRoleMapper userRoleMapper;
+    private final org.springframework.context.ApplicationEventPublisher events;
     private final PasswordEncoder encoder = PasswordEncoderFactories.createDelegatingPasswordEncoder();
 
     public JdbcUserService(SysUserMapper userMapper, SysOrgMapper orgMapper,
                            SysUserRoleMapper userRoleMapper) {
+        this(userMapper, orgMapper, userRoleMapper, null);
+    }
+
+    public JdbcUserService(SysUserMapper userMapper, SysOrgMapper orgMapper,
+                           SysUserRoleMapper userRoleMapper,
+                           org.springframework.context.ApplicationEventPublisher events) {
         this.userMapper = userMapper;
         this.orgMapper = orgMapper;
         this.userRoleMapper = userRoleMapper;
+        this.events = events;
     }
 
     // ---------- queries ----------
@@ -52,9 +60,8 @@ public class JdbcUserService implements UserService {
 
     @Override
     public List<UserDTO> findAll() {
-        return userMapper.selectList(new LambdaQueryWrapper<SysUser>()
-                        .orderByAsc(SysUser::getId))
-                .stream().map(this::toDto).toList();
+        return toDtos(userMapper.selectList(new LambdaQueryWrapper<SysUser>()
+                .orderByAsc(SysUser::getId)));
     }
 
     @Override
@@ -77,7 +84,7 @@ public class JdbcUserService implements UserService {
         }
 
         Page<SysUser> result = userMapper.selectPage(new Page<>(page, size), wrapper);
-        List<UserDTO> records = result.getRecords().stream().map(this::toDto).toList();
+        List<UserDTO> records = toDtos(result.getRecords());
         return new PageResult<>(records, result.getTotal(), page, size);
     }
 
@@ -104,6 +111,7 @@ public class JdbcUserService implements UserService {
         user.setSource(1);
         user.setStatus(1);
         user.setFailCount(0);
+        user.setMustChangePassword(1); // admin-chosen initial secret must be replaced
         user.setPasswordUpdateTime(LocalDateTime.now());
         userMapper.insert(user);
 
@@ -132,28 +140,51 @@ public class JdbcUserService implements UserService {
         if (status == null || (status != 0 && status != 1 && status != 2)) {
             throw new BizException(ErrorCode.BAD_REQUEST, "status must be 0, 1 or 2");
         }
-        requireUser(id);
+        SysUser target = requireUser(id);
+        if (status != 1) {
+            String me = currentUsername();
+            if (me != null && me.equals(target.getUsername())) {
+                throw new BizException(ErrorCode.CONFLICT, "不能停用/锁定当前登录的账号");
+            }
+            guardLastActiveAdmin(target);
+        }
         userMapper.update(null, new LambdaUpdateWrapper<SysUser>()
                 .eq(SysUser::getId, id)
                 .set(SysUser::getStatus, status)
                 .set(status == 1, SysUser::getFailCount, 0)); // re-enabling clears the fail counter
+        if (status != 1) {
+            // a disabled/locked account must not keep working on an old session
+            revokeSessions(target.getUsername(), "status-" + status);
+        }
     }
 
     @Override
     @Transactional
     public void resetPassword(Long id, String newPassword) {
-        requireUser(id);
+        SysUser target = requireUser(id);
         PasswordPolicy.validate(newPassword);
         userMapper.update(null, new LambdaUpdateWrapper<SysUser>()
                 .eq(SysUser::getId, id)
                 .set(SysUser::getPassword, encoder.encode(newPassword))
-                .set(SysUser::getPasswordUpdateTime, LocalDateTime.now()));
+                .set(SysUser::getPasswordUpdateTime, LocalDateTime.now())
+                // the admin knows this secret, so the holder has to replace it
+                .set(SysUser::getMustChangePassword, 1));
+        revokeSessions(target.getUsername(), "password-reset");
     }
 
     @Override
     @Transactional
     public void assignRoles(Long id, List<Long> roleIds) {
-        requireUser(id);
+        SysUser target = requireUser(id);
+        Long adminRoleId = userMapper.selectAdminRoleId();
+        boolean keepsAdmin = adminRoleId != null && roleIds != null && roleIds.contains(adminRoleId);
+        if (!keepsAdmin) {
+            String me = currentUsername();
+            if (me != null && me.equals(target.getUsername())) {
+                throw new BizException(ErrorCode.CONFLICT, "不能移除当前登录账号的管理员角色");
+            }
+            guardLastActiveAdmin(target);
+        }
         userRoleMapper.delete(new LambdaQueryWrapper<SysUserRole>()
                 .eq(SysUserRole::getUserId, id));
         if (roleIds != null) {
@@ -177,10 +208,51 @@ public class JdbcUserService implements UserService {
     }
 
     private UserDTO toDto(SysUser user) {
-        List<Long> roleIds = userRoleMapper.selectList(new LambdaQueryWrapper<SysUserRole>()
-                        .eq(SysUserRole::getUserId, user.getId()))
-                .stream().map(SysUserRole::getRoleId).toList();
-        return new UserDTO(user.getId(), user.getUsername(), user.getRealName(),
-                user.getOrgId(), user.getStatus(), user.getLastLoginTime(), roleIds);
+        return toDtos(List.of(user)).get(0);
+    }
+
+    /**
+     * Maps a page of rows with ONE role query instead of one per row — the old
+     * per-row lookup cost 21 SQL round trips for a 20-row page and thousands
+     * for an export.
+     */
+    private List<UserDTO> toDtos(List<SysUser> users) {
+        if (users.isEmpty()) {
+            return List.of();
+        }
+        List<Long> ids = users.stream().map(SysUser::getId).toList();
+        java.util.Map<Long, List<Long>> rolesByUser = userRoleMapper.selectByUserIds(ids).stream()
+                .collect(java.util.stream.Collectors.groupingBy(SysUserRole::getUserId,
+                        java.util.stream.Collectors.mapping(SysUserRole::getRoleId,
+                                java.util.stream.Collectors.toList())));
+        return users.stream()
+                .map(u -> new UserDTO(u.getId(), u.getUsername(), u.getRealName(),
+                        u.getOrgId(), u.getStatus(), u.getLastLoginTime(),
+                        rolesByUser.getOrDefault(u.getId(), List.of())))
+                .toList();
+    }
+
+    private String currentUsername() {        var auth = org.springframework.security.core.context.SecurityContextHolder
+                .getContext().getAuthentication();
+        return auth == null ? null : auth.getName();
+    }
+
+    private void revokeSessions(String username, String reason) {
+        if (events != null) {
+            events.publishEvent(
+                    new io.github.shiyi.auth.user.event.UserAccessRevokedEvent(username, reason));
+        }
+    }
+
+    /**
+     * Refuses an operation that would leave the platform with no enabled
+     * administrator — otherwise a single mis-click locks everybody out for good.
+     */
+    private void guardLastActiveAdmin(SysUser target) {
+        List<Long> activeAdmins = userMapper.selectActiveAdminIds();
+        if (activeAdmins.size() == 1 && activeAdmins.contains(target.getId())) {
+            throw new BizException(ErrorCode.CONFLICT,
+                    "至少需要保留一个启用的管理员，不能停用或降权最后一个管理员");
+        }
     }
 }

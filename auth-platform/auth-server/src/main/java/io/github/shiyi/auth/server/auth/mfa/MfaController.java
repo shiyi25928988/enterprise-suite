@@ -99,6 +99,9 @@ public class MfaController {
         context.setAuthentication(authentication);
         SecurityContextHolder.setContext(context);
         securityContextRepository.saveContext(context, request, response);
+        if (user instanceof io.github.shiyi.auth.server.auth.PlatformUser platformUser) {
+            io.github.shiyi.auth.server.auth.LoginSessionSupport.stamp(request, accounts, platformUser);
+        }
 
         return ResponseEntity.ok(ApiResult.ok(Map.of("redirect", "/")));
     }

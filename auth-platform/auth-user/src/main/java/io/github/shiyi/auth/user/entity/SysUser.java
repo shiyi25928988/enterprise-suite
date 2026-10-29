@@ -64,6 +64,9 @@ public class SysUser {
 
     private Integer failCount;
 
+    /** 1 = the holder must replace the initial password before using the platform */
+    private Integer mustChangePassword;
+
     @TableLogic
     private Integer deleted;
 

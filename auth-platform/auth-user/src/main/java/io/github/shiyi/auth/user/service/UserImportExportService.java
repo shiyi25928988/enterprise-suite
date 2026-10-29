@@ -271,6 +271,8 @@ public class UserImportExportService {
                         user.setSource(1);
                         user.setStatus(1);
                         user.setFailCount(0);
+                        // default sheet password is shared knowledge → force a change
+                        user.setMustChangePassword(1);
                         user.setPasswordUpdateTime(LocalDateTime.now());
                         userMapper.insert(user);
                         for (Long roleId : fRoleIds) {

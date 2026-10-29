@@ -25,11 +25,13 @@ public class SpaForwardController {
             "/callback",
             "/wecom-callback",
             "/403",
+            "/password",
             "/portal",
             "/users",
             "/orgs",
             "/roles",
             "/apps",
+            "/sessions",
             "/sync",
             "/security",
     })
