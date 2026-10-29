@@ -40,3 +40,10 @@ export const createRole = (body) =>
 
 export const updateRole = (id, body) =>
   http.put(`/api/v1/roles/${id}`, body).then((r) => r.data.data)
+
+// ---------- directory sync (WeCom / DingTalk) ----------
+export const listSyncSources = () =>
+  http.get('/api/v1/sync').then((r) => r.data.data)
+
+export const triggerSync = (source) =>
+  http.post(`/api/v1/sync/${source}`).then((r) => r.data.data)

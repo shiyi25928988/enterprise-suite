@@ -1,0 +1,102 @@
+# Grafana-managed alert rules, auto-provisioned on container start.
+# Notifications need a contact point: configure one in the Grafana UI
+# (Alerting → Contact points → email/webhook/钉钉机器人 webhook) and set the
+# notification policy, or wire alertmanager. Rules below evaluate every minute.
+apiVersion: 1
+groups:
+  - orgId: 1
+    name: auth-platform
+    folder: Auth Platform
+    interval: 1m
+    rules:
+      - uid: auth-login-failure-spike
+        title: 登录失败激增 (auth-platform)
+        condition: C
+        for: 5m
+        annotations:
+          summary: 5 分钟内登录失败超过 10 次，可能是密码喷洒或客户端配置错误
+        labels:
+          severity: warning
+        data:
+          - refId: A
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: prometheus
+            model:
+              datasource: { type: prometheus, uid: prometheus }
+              expr: 'sum(increase(auth_login_total{result="failure"}[5m]))'
+              instant: true
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator: { type: gt }
+                  operator: { type: and }
+                  query: { params: [A] }
+                  reducer: { params: [], type: last }
+              datasource: { type: __expr__, uid: __expr__ }
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              reducer: last
+              settings: { mode: dropNN }
+              type: reduce
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator: { params: [10], type: gt }
+                  operator: { type: and }
+                  query: { params: [B] }
+                  reducer: { params: [], type: gt }
+              datasource: { type: __expr__, uid: __expr__ }
+              expression: B
+              intervalMs: 1000
+              maxDataPoints: 43200
+              type: threshold
+
+      - uid: auth-instance-down
+        title: 认证服务实例离线 (auth-platform)
+        condition: C
+        for: 2m
+        annotations:
+          summary: Prometheus 超过 2 分钟抓不到 auth-server 指标，实例可能宕机
+        labels:
+          severity: critical
+        data:
+          - refId: A
+            relativeTimeRange: { from: 120, to: 0 }
+            datasourceUid: prometheus
+            model:
+              datasource: { type: prometheus, uid: prometheus }
+              expr: 'up{job="auth-platform"}'
+              instant: true
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator: { type: gt }
+                  operator: { type: and }
+                  query: { params: [A] }
+                  reducer: { params: [], type: last }
+              datasource: { type: __expr__, uid: __expr__ }
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              reducer: last
+              settings: { mode: dropNN }
+              type: reduce
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator: { params: [1], type: lt }
+                  operator: { type: and }
+                  query: { params: [B] }
+                  reducer: { params: [], type: lt }
+              datasource: { type: __expr__, uid: __expr__ }
+              expression: B
+              intervalMs: 1000
+              maxDataPoints: 43200
+              type: threshold

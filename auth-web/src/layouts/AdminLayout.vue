@@ -30,6 +30,7 @@ async function logout() {
         <router-link to="/orgs">组织管理</router-link>
         <router-link to="/roles">角色管理</router-link>
         <router-link to="/security">安全设置</router-link>
+        <router-link to="/sync">目录同步</router-link>
       </nav>
     </aside>
     <div class="main">

@@ -17,6 +17,7 @@ const routes = [
       { path: 'orgs', name: 'orgs', component: () => import('../views/admin/OrgView.vue') },
       { path: 'roles', name: 'roles', component: () => import('../views/admin/RolesView.vue') },
       { path: 'security', name: 'security', component: () => import('../views/admin/SecurityView.vue') },
+      { path: 'sync', name: 'sync', component: () => import('../views/admin/SyncView.vue') },
     ],
   },
   { path: '/403', name: 'forbidden', component: () => import('../views/ForbiddenView.vue') },

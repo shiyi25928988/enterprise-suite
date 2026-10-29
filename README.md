@@ -154,11 +154,23 @@ QR/SSO), WeCom userid mirrored to `wecomUserid` so M5a QR-login auto-binds the
 same account. Parent moves are reported, not applied (subtree path recompute).
 
 Admin API: `GET /api/v1/sync` (sources + last run), `POST /api/v1/sync/{source}`
-(trigger now). JDBC profile required.
+(trigger now). JDBC profile required. The admin console has a **目录同步** page
+(`/sync`) wrapping both endpoints — sources, last-run stats, warnings, and a
+one-click trigger.
 
 Verified E2E against stub DingTalk + WeCom APIs: org trees imported with
 correct materialized paths, users bound to their primary department, re-run is
 idempotent, username conflicts skipped.
+
+### M9: sync console page + Grafana alerting (2026-10-29)
+
+- **auth-web**: 目录同步 admin page — per-source last-run stats, warning
+  details, one-click sync trigger.
+- **deploy/grafana/provisioning/alerting/**: auto-provisioned rules —
+  *登录失败激增* (≥10 failures / 5 min, likely password spraying) and
+  *认证服务实例离线* (scrape target down 2 min). Rules appear in Grafana on
+  container start; configure a contact point (Alerting → Contact points) to
+  actually receive notifications.
 
 
 
@@ -203,8 +215,9 @@ so browser traffic is same-origin — the same topology as production.
       pre-provisioned auth dashboard; daily audit log purge (`auth.audit.*`)
 - [x] M8 directory sync: WeCom + DingTalk org/user import via a config-activated
       provider SPI; admin trigger API; verified E2E against stub APIs
+- [x] M9 sync console page (auth-web 目录同步) + provisioned Grafana alert rules
 - [ ] M5c: DingTalk QR login, badge QR, per-device token policies, anomaly detection
-- [ ] M9: Grafana alert rules, LDAP/HR-CSV providers (same SPI), frontend sync UI
+- [ ] M10: LDAP/HR-CSV providers (same SPI), notification contact points
 
 See the [development doc](docs/) (Chinese) for the full specification.
 
