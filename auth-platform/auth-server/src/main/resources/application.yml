@@ -55,6 +55,11 @@ logging:
 # M5 alternative authentication sources — both OFF by default.
 # See LdapAuthConfig / WeComAuthConfig for the full property sets.
 auth:
+  # Password lifecycle: after this many days since the last password change the
+  # next login is routed through the forced-change flow (0 disables the policy).
+  # Rows whose stamp predates the policy (NULL) are grandfathered.
+  password:
+    max-age-days: 90
   ldap:
     enabled: false
     # domain: corp.example.com
@@ -75,7 +80,7 @@ spring:
     activate:
       on-profile: "jdbc"
   datasource:
-    url: jdbc:mysql://${DB_HOST:10.35.79.185}:${DB_PORT:3306}/${DB_NAME:auth_platform}?createDatabaseIfNotExist=true&useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&sslMode=DISABLED&allowPublicKeyRetrieval=true
+    url: jdbc:mysql://${DB_HOST:10.35.79.185}:${DB_PORT:3306}/${DB_NAME:auth_platform}?createDatabaseIfNotExist=true&useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&sslMode=DISABLED&allowPublicKeyRetrieval=true&connectTimeout=8000&socketTimeout=30000
     username: ${DB_USERNAME:root}
     password: ${DB_PASSWORD:123456}
     hikari:

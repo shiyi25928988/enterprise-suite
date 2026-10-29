@@ -39,8 +39,10 @@ public class AppConfig {
 
     @Bean
     AppAccessFilter appAccessFilter(ObjectProvider<AppRegistryService> registry,
+                                    ObjectProvider<org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService> authorizations,
+                                    ObjectProvider<org.springframework.security.oauth2.server.authorization.client.RegisteredClientRepository> clients,
                                     ObjectMapper objectMapper,
                                     @Value("${auth.app.forbidden-redirect:/403}") String forbiddenRedirect) {
-        return new AppAccessFilter(registry, objectMapper, forbiddenRedirect);
+        return new AppAccessFilter(registry, authorizations, clients, objectMapper, forbiddenRedirect);
     }
 }

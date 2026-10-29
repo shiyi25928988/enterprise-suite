@@ -26,6 +26,11 @@ public final class LoginSessionSupport {
     public static void stamp(HttpServletRequest request, UserAccountService accounts,
                              PlatformUser user) {
         HttpSession session = request.getSession(true);
+        // Password past its configured maximum age funnels through the same
+        // forced-change flow as an initial password (DB flag + session stamp).
+        if (accounts.isPasswordExpired(user.id())) {
+            accounts.markMustChangePassword(user.id());
+        }
         session.setAttribute(ATTR_MUST_CHANGE_PASSWORD, accounts.mustChangePassword(user.id()));
         session.setAttribute(ATTR_LOGIN_IP, clientIp(request));
         session.setAttribute(ATTR_LOGIN_AGENT, abbreviate(request.getHeader("User-Agent"), 200));

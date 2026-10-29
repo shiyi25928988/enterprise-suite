@@ -20,13 +20,21 @@ public class JdbcUserAccountService implements UserAccountService {
 
     private final SysUserMapper userMapper;
     private final SysLoginLogMapper loginLogMapper;
+    /** Maximum password age in days; 0 disables the policy. */
+    private final int maxAgeDays;
     private final org.springframework.security.crypto.password.PasswordEncoder encoder =
             org.springframework.security.crypto.factory.PasswordEncoderFactories
                     .createDelegatingPasswordEncoder();
 
     public JdbcUserAccountService(SysUserMapper userMapper, SysLoginLogMapper loginLogMapper) {
+        this(userMapper, loginLogMapper, 0);
+    }
+
+    public JdbcUserAccountService(SysUserMapper userMapper, SysLoginLogMapper loginLogMapper,
+                                  int maxAgeDays) {
         this.userMapper = userMapper;
         this.loginLogMapper = loginLogMapper;
+        this.maxAgeDays = maxAgeDays;
     }
 
     @Override
@@ -94,6 +102,27 @@ public class JdbcUserAccountService implements UserAccountService {
         SysUser user = userMapper.selectById(userId);
         return user != null && user.getMustChangePassword() != null
                 && user.getMustChangePassword() == 1;
+    }
+
+    @Override
+    public boolean isPasswordExpired(Long userId) {
+        if (maxAgeDays <= 0) {
+            return false;
+        }
+        SysUser user = userMapper.selectById(userId);
+        if (user == null) {
+            return false;
+        }
+        // Rows predating the policy have a NULL stamp — grandfathered, not expired.
+        java.time.LocalDateTime changedAt = user.getPasswordUpdateTime();
+        return changedAt != null && changedAt.plusDays(maxAgeDays).isBefore(LocalDateTime.now());
+    }
+
+    @Override
+    public void markMustChangePassword(Long userId) {
+        userMapper.update(null, new LambdaUpdateWrapper<SysUser>()
+                .eq(SysUser::getId, userId)
+                .set(SysUser::getMustChangePassword, 1));
     }
 
     @Override

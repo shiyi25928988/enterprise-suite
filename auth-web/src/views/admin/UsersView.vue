@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import Modal from '../../components/Modal.vue'
+import OrgTreeSelect from '../../components/OrgTreeSelect.vue'
 import {
   pageUsers, createUser, updateUser, changeUserStatus,
   assignUserRoles, resetUserPassword, listRoles, orgTree,
@@ -233,10 +234,7 @@ onMounted(async () => {
   <div class="card">
     <div class="toolbar">
       <input v-model="query.keyword" placeholder="用户名 / 姓名" style="width: 180px;" @keyup.enter="search" />
-      <select v-model="query.orgId" style="width: 180px;">
-        <option :value="null">全部组织</option>
-        <option v-for="o in orgOptions" :key="o.id" :value="o.id">{{ o.orgName }}</option>
-      </select>
+      <OrgTreeSelect v-model="query.orgId" :tree="orgOptions" placeholder="全部组织" show-empty empty-label="全部组织" />
       <select v-model="query.status" style="width: 120px;">
         <option :value="null">全部状态</option>
         <option value="1">启用</option>
@@ -304,10 +302,7 @@ onMounted(async () => {
       <label>邮箱</label>
       <input v-model="form.email" type="email" />
       <label>所属组织</label>
-      <select v-model="form.orgId">
-        <option :value="null">未分配</option>
-        <option v-for="o in orgOptions" :key="o.id" :value="o.id">{{ o.orgName }}</option>
-      </select>
+      <OrgTreeSelect v-model="form.orgId" :tree="orgOptions" placeholder="未分配" show-empty empty-label="未分配" />
       <label>角色</label>
       <div class="checkboxes">
         <label v-for="r in roles" :key="r.id" class="inline">
@@ -362,11 +357,14 @@ onMounted(async () => {
 
       <label style="margin-top: 14px;">移动组织</label>
       <div style="display: flex; gap: 10px;">
-        <select v-model="moveOrgId" style="flex: 1;">
-          <option :value="undefined" disabled>选择目标组织（当前：{{ detail.orgName || '未分配' }}）</option>
-          <option :value="null">未分配</option>
-          <option v-for="o in orgOptions" :key="o.id" :value="o.id">{{ o.orgName }}</option>
-        </select>
+        <OrgTreeSelect
+          v-model="moveOrgId"
+          :tree="orgOptions"
+          :placeholder="`选择目标组织（当前：${detail.orgName || '未分配'}）`"
+          show-empty
+          empty-label="未分配"
+          style="flex: 1;"
+        />
         <button type="button" style="width: auto; margin: 0; padding: 8px 18px;" :disabled="!moveDirty" @click="submitMove">移动</button>
       </div>
     </template>

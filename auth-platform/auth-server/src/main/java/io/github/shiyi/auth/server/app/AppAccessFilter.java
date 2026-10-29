@@ -43,12 +43,19 @@ public class AppAccessFilter extends OncePerRequestFilter {
     private static final Logger log = LoggerFactory.getLogger(AppAccessFilter.class);
 
     private final ObjectProvider<AppRegistryService> registry;
+    private final ObjectProvider<org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService> authorizations;
+    private final ObjectProvider<org.springframework.security.oauth2.server.authorization.client.RegisteredClientRepository> clients;
     private final ObjectMapper objectMapper;
     private final String forbiddenRedirect;
 
-    public AppAccessFilter(ObjectProvider<AppRegistryService> registry, ObjectMapper objectMapper,
+    public AppAccessFilter(ObjectProvider<AppRegistryService> registry,
+                           ObjectProvider<org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService> authorizations,
+                           ObjectProvider<org.springframework.security.oauth2.server.authorization.client.RegisteredClientRepository> clients,
+                           ObjectMapper objectMapper,
                            String forbiddenRedirect) {
         this.registry = registry;
+        this.authorizations = authorizations;
+        this.clients = clients;
         this.objectMapper = objectMapper;
         this.forbiddenRedirect = forbiddenRedirect;
     }
@@ -56,13 +63,25 @@ public class AppAccessFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String uri = request.getRequestURI();
-        return !("/oauth2/authorize".equals(uri) || "/oauth2/device_authorization".equals(uri));
+        // /oauth2/device_verification is where the signed-in user approves a
+        // device code — the only point in the device flow that carries their
+        // identity, so the role gate must run there too.
+        return !("/oauth2/authorize".equals(uri)
+                || "/oauth2/device_authorization".equals(uri)
+                || "/oauth2/device_verification".equals(uri));
     }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                     FilterChain chain) throws ServletException, IOException {
         String clientId = request.getParameter("client_id");
+        if (clientId == null || clientId.isBlank()) {
+            clientId = resolveClientFromUserCode(request);
+        }
+        if (log.isDebugEnabled()) {
+            log.debug("AppAccess gate: uri={} paramClientId={} resolvedClientId={}",
+                    request.getRequestURI(), request.getParameter("client_id"), clientId);
+        }
         if (clientId == null || clientId.isBlank()) {
             chain.doFilter(request, response);
             return;
@@ -102,5 +121,37 @@ public class AppAccessFilter extends OncePerRequestFilter {
     private boolean acceptsHtml(HttpServletRequest request) {
         String accept = request.getHeader("Accept");
         return accept != null && accept.contains(MediaType.TEXT_HTML_VALUE);
+    }
+
+    /**
+     * Device verification requests identify the application indirectly: only a
+     * {@code user_code} is on the URL, the client lives in the pending device
+     * authorization record. The record holds the <em>registered client id</em>
+     * (a UUID), which must be translated back to the {@code client_id} string
+     * the {@code sys_app} registry is keyed by. An unknown/expired user_code is
+     * passed through — the verification provider rejects it with the proper
+     * protocol error.
+     */
+    private String resolveClientFromUserCode(HttpServletRequest request) {
+        String userCode = request.getParameter("user_code");
+        if (userCode == null || userCode.isBlank()) {
+            return null;
+        }
+        var service = authorizations.getIfAvailable();
+        if (service == null) {
+            return null;
+        }
+        var authorization = service.findByToken(userCode,
+                new org.springframework.security.oauth2.server.authorization.OAuth2TokenType(
+                        org.springframework.security.oauth2.core.endpoint.OAuth2ParameterNames.USER_CODE));
+        if (authorization == null) {
+            return null;
+        }
+        var clientRepository = clients.getIfAvailable();
+        if (clientRepository == null) {
+            return null;
+        }
+        var registeredClient = clientRepository.findById(authorization.getRegisteredClientId());
+        return registeredClient == null ? null : registeredClient.getClientId();
     }
 }

@@ -35,6 +35,16 @@ public interface UserAccountService {
      */
     boolean mustChangePassword(Long userId);
 
+    /**
+     * True when the current password is older than the configured maximum age
+     * (auth.password.max-age-days). Never true when the policy is disabled
+     * (0) or the password has never been stamped.
+     */
+    boolean isPasswordExpired(Long userId);
+
+    /** Flags the account so the next login routes through the change flow. */
+    void markMustChangePassword(Long userId);
+
     /** Compares a raw password with the stored hash. */
     boolean matchesPassword(Long userId, String rawPassword);
 

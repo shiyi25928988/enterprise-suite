@@ -61,13 +61,36 @@ public class SecurityConfig {
     SecurityFilterChain authorizationServerSecurityFilterChain(
             HttpSecurity http, io.github.shiyi.auth.server.app.AppAccessFilter appAccessFilter,
             tools.jackson.databind.ObjectMapper objectMapper,
-            io.github.shiyi.auth.user.account.UserAccountService accounts)
+            io.github.shiyi.auth.user.account.UserAccountService accounts,
+            org.springframework.security.oauth2.server.authorization.client.RegisteredClientRepository clients)
             throws Exception {
         // Security 7: no static factory any more, the configurer is instantiated directly.
         OAuth2AuthorizationServerConfigurer authorizationServer = new OAuth2AuthorizationServerConfigurer();
 
         http.securityMatcher(authorizationServer.getEndpointsMatcher())
-            .with(authorizationServer, configurer -> configurer.oidc(oidc -> oidc
+            .with(authorizationServer, configurer -> configurer
+                    // Device flow (OAuth 2.1): not enabled by default in Security 7 —
+                    // opt in so mes-screen style clients can mint device codes.
+                    .deviceAuthorizationEndpoint(Customizer.withDefaults())
+                    .deviceVerificationEndpoint(Customizer.withDefaults())
+                    // SAS 7.1.2 gaps for the device flow's PUBLIC clients:
+                    // 1) no converter authenticates an unattended client on
+                    //    /oauth2/device_authorization or grant_type=device_code
+                    //    token requests (PublicClientAuthenticationConverter only
+                    //    matches PKCE authorization_code);
+                    // 2) PublicClientAuthenticationProvider always runs the PKCE
+                    //    code_verifier check, which rejects every device request
+                    //    with invalid_grant. Append our own converter + provider
+                    //    and drop the broken default provider.
+                    .clientAuthentication(clientAuth -> {
+                        clientAuth.authenticationConverters(converters ->
+                                converters.add(new io.github.shiyi.auth.server.auth.DeviceGrantClientAuthenticationConverter()));
+                        clientAuth.authenticationProviders(providers -> {
+                            providers.removeIf(p -> p instanceof org.springframework.security.oauth2.server.authorization.authentication.PublicClientAuthenticationProvider);
+                            providers.add(new io.github.shiyi.auth.server.auth.DevicePublicClientAuthenticationProvider(clients));
+                        });
+                    })
+                    .oidc(oidc -> oidc
                     // Default /userinfo only echoes {sub}. Clients (e.g. the WMS SPA)
                     // need display name + role codes to render without a second API.
                     .userInfoEndpoint(userInfo -> userInfo.userInfoMapper(context -> {
@@ -93,7 +116,14 @@ public class SecurityConfig {
                         });
                         return new org.springframework.security.oauth2.core.oidc.OidcUserInfo(claims);
                     }))))
-            .authorizeHttpRequests(authorize -> authorize.anyRequest().authenticated())
+            // The device authorization endpoint is called by the unattended DEVICE
+            // (no user session): SAS registers its filter after AuthorizationFilter
+            // and does client authentication inside the endpoint, so it must be
+            // permitted here — unregistered clients are still rejected there.
+            // Device verification stays authenticated: it is the user's approval step.
+            .authorizeHttpRequests(authorize -> authorize
+                    .requestMatchers("/oauth2/device_authorization").permitAll()
+                    .anyRequest().authenticated())
             // Role → application gate: must run once the security context is loaded
             // (authentication is already resolved on the returning authorize call)
             // but before the protocol endpoints issue codes.

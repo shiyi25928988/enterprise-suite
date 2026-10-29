@@ -82,8 +82,10 @@ public class UserDomainConfig {
 
     @Bean
     @ConditionalOnProperty(name = "spring.datasource.url")
-    UserAccountService jdbcUserAccountService(SysUserMapper userMapper, SysLoginLogMapper loginLogMapper) {
-        return new JdbcUserAccountService(userMapper, loginLogMapper);
+    UserAccountService jdbcUserAccountService(SysUserMapper userMapper, SysLoginLogMapper loginLogMapper,
+            @org.springframework.beans.factory.annotation.Value(
+                    "${auth.password.max-age-days:90}") int passwordMaxAgeDays) {
+        return new JdbcUserAccountService(userMapper, loginLogMapper, passwordMaxAgeDays);
     }
 
     @Bean

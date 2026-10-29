@@ -33,6 +33,17 @@ public class InMemoryUserAccountService implements UserAccountService {
     }
 
     @Override
+    public boolean isPasswordExpired(Long userId) {
+        // in-memory mode: no password timestamps are tracked, policy off
+        return false;
+    }
+
+    @Override
+    public void markMustChangePassword(Long userId) {
+        mustChange.put(userId, Boolean.TRUE);
+    }
+
+    @Override
     public boolean matchesPassword(Long userId, String rawPassword) {
         return users.values().stream()
                 .filter(u -> u.id().equals(userId))
