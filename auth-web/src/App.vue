@@ -1,11 +1,18 @@
 <script setup>
+import { computed } from 'vue'
+import { useRoute } from 'vue-router'
+
+// "bare" routes (login/callbacks/403) render standalone cards inside the
+// narrow centered container; the admin console needs the full viewport.
+const route = useRoute()
+const wide = computed(() => !route.meta.bare)
 </script>
 
 <template>
   <header class="topbar">
     <span class="brand">Enterprise Suite · Auth</span>
   </header>
-  <main class="container">
+  <main class="container" :class="{ wide }">
     <router-view />
   </main>
 </template>
@@ -33,7 +40,10 @@ body {
   border-bottom: 1px solid var(--border);
 }
 .brand { font-weight: 600; }
+/* narrow centered container for standalone auth pages */
 .container { max-width: 720px; margin: 48px auto; padding: 0 16px; }
+/* full-bleed for the admin console layout (sidebar + content) */
+.container.wide { max-width: none; margin: 0; padding: 0; }
 .card {
   background: #fff;
   border: 1px solid var(--border);

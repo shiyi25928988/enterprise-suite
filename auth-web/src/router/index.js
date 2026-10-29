@@ -2,9 +2,9 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 
 const routes = [
-  { path: '/login', name: 'login', component: () => import('../views/LoginView.vue') },
-  { path: '/callback', name: 'callback', component: () => import('../views/CallbackView.vue') },
-  { path: '/wecom-callback', name: 'wecom-callback', component: () => import('../views/WecomCallbackView.vue') },
+  { path: '/login', name: 'login', component: () => import('../views/LoginView.vue'), meta: { bare: true } },
+  { path: '/callback', name: 'callback', component: () => import('../views/CallbackView.vue'), meta: { bare: true } },
+  { path: '/wecom-callback', name: 'wecom-callback', component: () => import('../views/WecomCallbackView.vue'), meta: { bare: true } },
   // The admin console itself is admin-only (also enforced server-side via
   // @PreAuthorize("hasRole('ADMIN')") on every /api/v1/** endpoint).
   {
@@ -20,7 +20,7 @@ const routes = [
       { path: 'sync', name: 'sync', component: () => import('../views/admin/SyncView.vue') },
     ],
   },
-  { path: '/403', name: 'forbidden', component: () => import('../views/ForbiddenView.vue') },
+  { path: '/403', name: 'forbidden', component: () => import('../views/ForbiddenView.vue'), meta: { bare: true } },
 ]
 
 const router = createRouter({ history: createWebHistory(), routes })
