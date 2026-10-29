@@ -9,7 +9,7 @@ import com.baomidou.mybatisplus.extension.plugins.MybatisPlusInterceptor;
 import com.baomidou.mybatisplus.extension.plugins.inner.PaginationInnerInterceptor;
 
 import org.mybatis.spring.annotation.MapperScan;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -46,14 +46,14 @@ public class UserDomainConfig {
 
     /** MapperScan only when a DataSource exists; otherwise mappers have no factory and would fail boot. */
     @Configuration
-    @ConditionalOnBean(DataSource.class)
+    @ConditionalOnProperty(name = "spring.datasource.url")
     @MapperScan("io.github.shiyi.auth.user.mapper")
     static class MapperScanConfig {
     }
 
     /** MyBatis-Plus pagination interceptor — without it selectPage() silently returns all rows. */
     @Bean
-    @ConditionalOnBean(DataSource.class)
+    @ConditionalOnProperty(name = "spring.datasource.url")
     MybatisPlusInterceptor mybatisPlusInterceptor() {
         MybatisPlusInterceptor interceptor = new MybatisPlusInterceptor();
         interceptor.addInnerInterceptor(new PaginationInnerInterceptor(DbType.MYSQL));
@@ -63,7 +63,7 @@ public class UserDomainConfig {
     // ---------- account / login ----------
 
     @Bean
-    @ConditionalOnBean(DataSource.class)
+    @ConditionalOnProperty(name = "spring.datasource.url")
     UserAccountService jdbcUserAccountService(SysUserMapper userMapper, SysLoginLogMapper loginLogMapper) {
         return new JdbcUserAccountService(userMapper, loginLogMapper);
     }
@@ -77,7 +77,7 @@ public class UserDomainConfig {
     // ---------- user CRUD ----------
 
     @Bean
-    @ConditionalOnBean(DataSource.class)
+    @ConditionalOnProperty(name = "spring.datasource.url")
     UserService jdbcUserService(SysUserMapper userMapper, SysOrgMapper orgMapper,
                                 SysUserRoleMapper userRoleMapper) {
         return new JdbcUserService(userMapper, orgMapper, userRoleMapper);
@@ -92,7 +92,7 @@ public class UserDomainConfig {
     // ---------- organization ----------
 
     @Bean
-    @ConditionalOnBean(DataSource.class)
+    @ConditionalOnProperty(name = "spring.datasource.url")
     OrgService jdbcOrgService(SysOrgMapper orgMapper, SysUserMapper userMapper) {
         return new JdbcOrgService(orgMapper, userMapper);
     }
@@ -136,7 +136,7 @@ public class UserDomainConfig {
     // ---------- roles ----------
 
     @Bean
-    @ConditionalOnBean(DataSource.class)
+    @ConditionalOnProperty(name = "spring.datasource.url")
     RoleService jdbcRoleService(SysRoleMapper roleMapper) {
         return new JdbcRoleService(roleMapper);
     }

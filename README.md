@@ -36,8 +36,15 @@ mvn clean package -DskipTests
 java -jar auth-platform/auth-server/target/auth-server-*.jar
 
 # Option B: JDBC mode (Flyway creates SAS + platform schema on first boot)
-DB_USER=root DB_PWD=secret \
+DB_USERNAME=root DB_PASSWORD=secret \
 java -jar auth-platform/auth-server/target/auth-server-*.jar --spring.profiles.active=jdbc
+
+# Option C: full production mode — MySQL persistence + Redis-backed sessions
+# (login state survives restarts and is shared across instances)
+java -jar auth-platform/auth-server/target/auth-server-*.jar \
+     --spring.profiles.active=jdbc,redis \
+     --spring.datasource.username=root --spring.datasource.password=secret \
+     --spring.data.redis.host=redis.internal --spring.data.redis.password=secret
 ```
 
 Then:
@@ -66,8 +73,22 @@ Built and smoke-tested against JDK 21.0.12 + Maven 3.9.16 + Boot 4.1.2 / Securit
 | Full OIDC: authorize → consent → code → token (PKCE S256) | 200, `id_token` carries `auth_time` |
 | Logout | session invalidated, subsequent `/me` → 401 |
 
-Not exercised (needs external infrastructure): JDBC profile (MySQL 8 + Flyway
-migrations), AD/LDAP and WeCom providers (disabled by default).
+Not exercised (needs external infrastructure): AD/LDAP and WeCom providers
+(disabled by default).
+
+### Verified against real MySQL + Redis (2026-10-29, M6)
+
+`jdbc,redis` profile against MySQL 8.4 / Redis on a LAN server:
+
+| Check | Result |
+|---|---|
+| Flyway V1–V4 migrations on first boot | schema `auth_platform` at version 4 |
+| JSON login → login audit row written to MySQL | `sys_login_log` insert ok |
+| `/api/auth/me` with session | 200, authorities `[ROLE_ADMIN, FACTOR_PASSWORD]` |
+| `/api/v1/users`, `/api/v1/orgs/tree` | data served from MySQL |
+| Spring Session keys in Redis | `spring:session:sessions:<id>` present |
+| `kill -9` the JVM → restart → same session cookie | session restored from Redis, user still logged in |
+| Demo mode (no profile) after M6 wiring changes | unchanged: ~8 s boot, in-memory fallbacks active |
 
 
 ### Frontend SPA (auth-web)
@@ -103,8 +124,10 @@ so browser traffic is same-origin — the same topology as production.
       `mes-screen` (8h token for workshop displays)
 - [x] M5b MFA: TOTP second factor (RFC 6238), challenge-based two-step login,
       enrollment UI under Security settings; per-user opt-in
+- [x] M6 cluster session store: Redis-backed HTTP session (`redis` profile),
+      servlet-session timeout retained; JDBC profile verified against MySQL 8.4
 - [ ] M5c: DingTalk, badge QR, per-device token policies, anomaly detection
-- [ ] M6 hardening: load test (500+ TPS), audit reports, monitoring
+- [ ] M6b hardening: load test (500+ TPS), audit reports, monitoring
 
 See the [development doc](docs/) (Chinese) for the full specification.
 

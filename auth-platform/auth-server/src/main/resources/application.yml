@@ -4,6 +4,19 @@ spring:
   threads:
     virtual:
       enabled: true   # JDK 21 virtual threads: good fit for IO-heavy audit/notification work
+  data:
+    redis:
+      # M6: session store — only contacted when the "redis" profile is active
+      # (RedisSessionConfig). Override via REDIS_HOST / REDIS_PORT / REDIS_PASSWORD.
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 2s
+      lettuce:
+        pool:
+          max-active: 16
+          max-idle: 8
+          min-idle: 2
 
 server:
   port: 9000
@@ -43,17 +56,56 @@ auth:
     # redirect-uri: ""   # defaults to {origin}/wecom-callback
 
 ---
-# Demo / in-memory mode (no "jdbc" profile): the JDBC driver is on the classpath,
-# so Boot's DataSource auto-configuration would demand a URL and fail the context.
-# Keep it out of the way — PersistenceConfig then wires the in-memory fallbacks.
-# All other JDBC-related auto-configurations back off on their own because no
-# DataSource bean exists.
+# JDBC mode ("jdbc" profile): real MySQL persistence. The database is created
+# on first connect (createDatabaseIfNotExist) and Flyway then applies V1-V4.
+# Credentials come from the environment in real deployments.
 spring:
   config:
     activate:
-      on-profile: "!jdbc"
+      on-profile: "jdbc"
+  datasource:
+    url: jdbc:mysql://${DB_HOST:10.35.79.185}:${DB_PORT:3306}/${DB_NAME:auth_platform}?createDatabaseIfNotExist=true&useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&sslMode=DISABLED&allowPublicKeyRetrieval=true
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:123456}
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+
+---
+# Demo / in-memory mode (no "jdbc", no "redis"): the JDBC driver is on the
+# classpath, so Boot's DataSource auto-configuration would demand a URL and
+# fail the context; the Redis one would wire a connection factory whose health
+# indicator fails without a reachable Redis. Keep both out of the way —
+# PersistenceConfig then wires the in-memory fallbacks.
+#
+# NOTE: spring.autoconfigure.exclude is a list property, and profile documents
+# do NOT merge lists — the last active document wins. So the exclusions are
+# grouped by combination expression instead of separate "!jdbc"/"!redis"
+# documents, which would silently shadow each other.
+spring:
+  config:
+    activate:
+      on-profile: "!jdbc & !redis"
   autoconfigure:
     exclude:
       - org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration
       - org.springframework.boot.jdbc.autoconfigure.DataSourceTransactionManagerAutoConfiguration
       - org.springframework.boot.jdbc.autoconfigure.JdbcTemplateAutoConfiguration
+      - org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfiguration
+      - org.springframework.boot.data.redis.autoconfigure.DataRedisRepositoriesAutoConfiguration
+      - org.springframework.boot.data.redis.autoconfigure.health.DataRedisHealthContributorAutoConfiguration
+      - org.springframework.boot.data.redis.autoconfigure.health.DataRedisReactiveHealthContributorAutoConfiguration
+
+---
+# JDBC-only mode (real database, no Redis): still keep the Redis machinery out
+# of the way — it is only needed by the "redis" profile (RedisSessionConfig).
+spring:
+  config:
+    activate:
+      on-profile: "jdbc & !redis"
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfiguration
+      - org.springframework.boot.data.redis.autoconfigure.DataRedisRepositoriesAutoConfiguration
+      - org.springframework.boot.data.redis.autoconfigure.health.DataRedisHealthContributorAutoConfiguration
+      - org.springframework.boot.data.redis.autoconfigure.health.DataRedisReactiveHealthContributorAutoConfiguration

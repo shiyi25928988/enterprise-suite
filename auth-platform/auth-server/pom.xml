@@ -68,7 +68,9 @@
             <artifactId>spring-security-ldap</artifactId>
         </dependency>
 
-        <!-- Redis / Spring Session：M6 集群阶段启用，避免无 Redis 环境下 Session 自动装配失效
+        <!-- M6: Redis-backed HTTP session (multi-instance login state sharing).
+             Only active under the "redis" profile — see RedisSessionConfig and
+             the "!redis" autoconfiguration excludes in application.yml. -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-redis</artifactId>
@@ -77,7 +79,11 @@
             <groupId>org.springframework.session</groupId>
             <artifactId>spring-session-data-redis</artifactId>
         </dependency>
-        -->
+        <!-- Required by the Lettuce connection pool configured in application.yml -->
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-pool2</artifactId>
+        </dependency>
     </dependencies>
 
     <build>

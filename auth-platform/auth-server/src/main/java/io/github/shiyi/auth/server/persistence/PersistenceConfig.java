@@ -10,7 +10,7 @@ import com.nimbusds.jose.proc.SecurityContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationRunner;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -30,9 +30,6 @@ import org.springframework.security.oauth2.server.authorization.settings.ClientS
 import org.springframework.security.oauth2.server.authorization.settings.TokenSettings;
 import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService;
 import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationConsentService;
-
-import java.time.Duration;
-import java.util.UUID;
 
 /**
  * Persistence wiring with dual mode:
@@ -56,7 +53,7 @@ public class PersistenceConfig {
     // ---------- Registered clients ----------
 
     @Bean
-    @ConditionalOnBean(javax.sql.DataSource.class)
+    @ConditionalOnProperty(name = "spring.datasource.url")
     RegisteredClientRepository jdbcRegisteredClientRepository(org.springframework.jdbc.core.JdbcTemplate jdbc) {
         return new JdbcRegisteredClientRepository(jdbc);
     }
@@ -70,7 +67,7 @@ public class PersistenceConfig {
 
     /** Seeds the demo clients into JDBC storage on first boot (idempotent). */
     @Bean
-    @ConditionalOnBean(javax.sql.DataSource.class)
+    @ConditionalOnProperty(name = "spring.datasource.url")
     ApplicationRunner demoClientSeeder(RegisteredClientRepository repository) {
         return args -> {
             if (repository.findByClientId("mes-web") == null) {
@@ -133,7 +130,7 @@ public class PersistenceConfig {
     // ---------- Authorizations & consent ----------
 
     @Bean
-    @ConditionalOnBean(javax.sql.DataSource.class)
+    @ConditionalOnProperty(name = "spring.datasource.url")
     OAuth2AuthorizationService jdbcOAuth2AuthorizationService(
             org.springframework.jdbc.core.JdbcTemplate jdbc, RegisteredClientRepository clients) {
         return new JdbcOAuth2AuthorizationService(jdbc, clients);
@@ -147,7 +144,7 @@ public class PersistenceConfig {
     }
 
     @Bean
-    @ConditionalOnBean(javax.sql.DataSource.class)
+    @ConditionalOnProperty(name = "spring.datasource.url")
     OAuth2AuthorizationConsentService jdbcOAuth2AuthorizationConsentService(
             org.springframework.jdbc.core.JdbcTemplate jdbc, RegisteredClientRepository clients) {
         return new JdbcOAuth2AuthorizationConsentService(jdbc, clients);
@@ -163,7 +160,7 @@ public class PersistenceConfig {
     // ---------- JWK signing keys ----------
 
     @Bean
-    @ConditionalOnBean(javax.sql.DataSource.class)
+    @ConditionalOnProperty(name = "spring.datasource.url")
     JwkKeyService jdbcJwkKeyService(JdbcTemplate jdbc) {
         log.info("JWK signing keys persisted in auth_jwk (survive restarts)");
         return new JdbcJwkKeyService(jdbc);
