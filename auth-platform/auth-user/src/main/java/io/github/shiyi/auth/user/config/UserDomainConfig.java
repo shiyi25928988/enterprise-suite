@@ -13,6 +13,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 import io.github.shiyi.auth.user.account.InMemoryUserAccountService;
 import io.github.shiyi.auth.user.account.JdbcUserAccountService;
@@ -24,6 +25,7 @@ import io.github.shiyi.auth.user.mapper.SysLoginLogMapper;
 import io.github.shiyi.auth.user.service.InMemoryLoginLogService;
 import io.github.shiyi.auth.user.service.JdbcLoginLogService;
 import io.github.shiyi.auth.user.service.LoginLogService;
+import io.github.shiyi.auth.user.service.LoginLogRetention;
 import io.github.shiyi.auth.user.mapper.SysOrgMapper;
 import io.github.shiyi.auth.user.mapper.SysRoleMapper;
 import io.github.shiyi.auth.user.mapper.SysUserMapper;
@@ -45,7 +47,16 @@ import io.github.shiyi.auth.user.service.UserService;
  * </ul>
  */
 @Configuration
+@EnableScheduling
 public class UserDomainConfig {
+
+    /** Daily purge of audit rows past auth.audit.retention-days (no-op in-memory). */
+    @Bean
+    LoginLogRetention loginLogRetention(LoginLogService loginLogs,
+                                        @org.springframework.beans.factory.annotation.Value(
+                                                "${auth.audit.retention-days:90}") int retentionDays) {
+        return new LoginLogRetention(loginLogs, retentionDays);
+    }
 
     /** MapperScan only when a DataSource exists; otherwise mappers have no factory and would fail boot. */
     @Configuration

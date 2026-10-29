@@ -1,0 +1,113 @@
+{
+  "uid": "auth-platform",
+  "title": "Auth Platform",
+  "tags": ["auth", "spring", "oauth2"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "datasource": { "type": "prometheus", "uid": "prometheus" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Login rate by result (per sec)",
+      "description": "auth_login_total from AuthMetrics — covers every provider (password, MFA, LDAP, WeCom).",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "unit": "ops", "custom": { "fillOpacity": 15, "lineWidth": 2 } },
+        "overrides": []
+      },
+      "targets": [
+        { "refId": "A", "expr": "sum by (result) (rate(auth_login_total[5m]))", "legendFormat": "{{result}}" }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Logins (1h)",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "sum(increase(auth_login_total{result=\"success\"}[1h]))", "legendFormat": "success" }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Failed logins (1h)",
+      "description": "Spikes here usually mean password spraying or a misconfigured client.",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "unit": "short", "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 10 } ] } },
+        "overrides": []
+      },
+      "targets": [
+        { "refId": "A", "expr": "sum(increase(auth_login_total{result=\"failure\"}[1h]))", "legendFormat": "failure" }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "HTTP request rate by URI (per sec)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "fillOpacity": 10, "lineWidth": 2 } }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "sum by (uri) (rate(http_server_requests_seconds_count[5m]))", "legendFormat": "{{uri}}" }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "HTTP latency P99 / P50 (seconds)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "fillOpacity": 10, "lineWidth": 2 } }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "max(http_server_requests_seconds_max)", "legendFormat": "max" },
+        { "refId": "B", "expr": "histogram_quantile(0.99, sum by (le) (rate(http_server_requests_seconds_bucket[5m])))", "legendFormat": "p99" },
+        { "refId": "C", "expr": "histogram_quantile(0.5, sum by (le) (rate(http_server_requests_seconds_bucket[5m])))", "legendFormat": "p50" }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "JVM memory used (heap vs non-heap)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "bytes", "custom": { "fillOpacity": 20, "lineWidth": 2 } }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "sum(jvm_memory_used_bytes{area=\"heap\"})", "legendFormat": "heap" },
+        { "refId": "B", "expr": "sum(jvm_memory_used_bytes{area=\"nonheap\"})", "legendFormat": "nonheap" }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "JVM live threads / process CPU",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "custom": { "fillOpacity": 10, "lineWidth": 2 } }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "jvm_threads_live_threads", "legendFormat": "threads" },
+        { "refId": "B", "expr": "process_cpu_usage * 100", "legendFormat": "cpu %", "hide": false }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Uptime",
+      "type": "stat",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "process_uptime_seconds", "legendFormat": "uptime" }
+      ]
+    }
+  ]
+}

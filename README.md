@@ -18,10 +18,14 @@ Enterprise unified authentication platform built on **Spring Authorization Serve
 
 ```
 enterprise-suite/
-└── auth-platform/
-    ├── auth-common/    shared types: ApiResult, ErrorCode, base exceptions
-    ├── auth-user/      user domain: DTO / service / REST API (SAS-agnostic)
-    └── auth-server/    executable: SAS 7 wiring + user service assembly
+├── auth-platform/
+│   ├── auth-common/    shared types: ApiResult, ErrorCode, base exceptions
+│   ├── auth-user/      user domain: DTO / service / REST API (SAS-agnostic)
+│   └── auth-server/    executable: SAS 7 wiring + user service assembly
+├── auth-web/           admin console SPA (Vue 3 + Vite)
+├── bench/              single-file JDK 21 load tools (java bench/X.java)
+└── deploy/             docker-compose: Prometheus + Grafana, pre-provisioned
+                        datasource and auth-platform dashboard
 ```
 
 Dependency direction is enforced at compile time: `auth-server → auth-user → auth-common`, never backwards.
@@ -108,6 +112,20 @@ same workstation, remote database):
 | Full login flow (csrf → login → me → logout, BCrypt + MySQL audit write + Redis session write), 32 workers × 3,200 flows | 54 flows/s, **zero failures**, P50 543 ms / P99 1.3 s |
 | Stateless OIDC reads (discovery document), 64 workers × 128,000 requests | **3,235 req/s**, zero errors, P50 16 ms / P99 102 ms |
 
+### M7: monitoring stack + audit retention (2026-10-29)
+
+- **`deploy/`** — one-shot Grafana + Prometheus stack:
+  `cd deploy && GRAFANA_ADMIN_PASSWORD=... docker compose up -d`
+  → Grafana on :3000 (datasource + the *Auth Platform* dashboard auto-provisioned:
+  login success/failure rate from `auth_login_total`, HTTP rate & latency percentiles,
+  JVM memory/threads/uptime). Point `deploy/prometheus.yml` at your auth-server
+  instances (default `host.docker.internal:9000`).
+  ⚠️ `/actuator/prometheus` is unauthenticated by design — firewall :9000 so only
+  the Prometheus host can reach it.
+- **Audit retention**: rows in `sys_login_log` older than
+  `auth.audit.retention-days` (default 90) are purged daily at
+  `auth.audit.cleanup-cron` (default 03:00). No-op in in-memory mode.
+
 
 ### Frontend SPA (auth-web)
 
@@ -146,8 +164,10 @@ so browser traffic is same-origin — the same topology as production.
       servlet-session timeout retained; JDBC profile verified against MySQL 8.4
 - [x] M6b hardening: Prometheus endpoint + auth metrics, login audit query API,
       load verified (3.2k req/s reads, 54 full logins/s, zero failures)
+- [x] M7 monitoring & retention: `deploy/` Grafana + Prometheus compose stack with
+      pre-provisioned auth dashboard; daily audit log purge (`auth.audit.*`)
 - [ ] M5c: DingTalk, badge QR, per-device token policies, anomaly detection
-- [ ] M7: Grafana dashboard pack, scheduled audit cleanup, HR/AD user sync
+- [ ] M8: HR/AD user sync (needs a reachable AD/HR source), Grafana alert rules
 
 See the [development doc](docs/) (Chinese) for the full specification.
 

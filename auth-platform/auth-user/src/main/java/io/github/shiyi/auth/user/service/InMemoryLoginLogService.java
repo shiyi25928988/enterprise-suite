@@ -22,4 +22,9 @@ public class InMemoryLoginLogService implements LoginLogService {
         log.debug("Login audit query in demo mode - returning empty page (in-memory mode keeps no audit trail)");
         return new PageResult<>(java.util.List.of(), 0, page, size);
     }
+
+    @Override
+    public int purgeBefore(LocalDateTime threshold) {
+        return 0; // nothing durable to purge in demo mode
+    }
 }

@@ -1,0 +1,45 @@
+# One-shot monitoring stack for the auth platform: Prometheus (scrapes
+# /actuator/prometheus on every auth-server instance) + Grafana (pre-provisioned
+# datasource and the auth-platform dashboard from ./grafana/dashboards).
+#
+# Usage (on the server that can reach the auth-server instances):
+#   docker compose up -d
+#   Grafana:  http://<host>:3000  (admin/admin — change on first login)
+#   Prometheus UI: http://<host>:9090
+#
+# auth-server must NOT be exposed to anything but these containers on its
+# metrics path — restrict :9000 with a firewall / security group.
+
+services:
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: auth-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prom-data:/prometheus
+    extra_hosts:
+      # lets prometheus.yml reach auth-server running on the Docker host
+      - "host.docker.internal:host-gateway"
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    container_name: auth-grafana
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+    ports:
+      - "3000:3000"
+    environment:
+      # set a real password via .env or secrets in production
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+
+volumes:
+  prom-data:
+  grafana-data:

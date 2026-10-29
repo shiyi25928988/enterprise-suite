@@ -24,4 +24,10 @@ public interface LoginLogService {
      */
     PageResult<LoginLogDTO> page(int page, int size, String username,
                                  Integer success, LocalDateTime start, LocalDateTime end);
+
+    /**
+     * Retention enforcement: delete audit rows strictly older than the given
+     * instant. Returns the number of rows removed (0 in demo mode).
+     */
+    int purgeBefore(LocalDateTime threshold);
 }

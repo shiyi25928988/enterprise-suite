@@ -1,0 +1,17 @@
+# Prometheus scrape config for the auth platform.
+#
+# The default target uses host.docker.internal (mapped to the Docker host by
+# docker-compose.yml). Add one entry per auth-server instance — the platform is
+# horizontally scalable behind Redis sessions, so any instance's metrics are valid.
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: auth-platform
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+          - "host.docker.internal:9000"   # auth-server on the Docker host
+        # - targets: ["10.35.79.171:9000"] # auth-server on a LAN instance
+        # - targets: ["auth-server:9000"]   # auth-server as a compose service

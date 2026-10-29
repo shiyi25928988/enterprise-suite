@@ -46,4 +46,10 @@ public class JdbcLoginLogService implements LoginLogService {
                 .toList();
         return new PageResult<>(records, result.getTotal(), page, size);
     }
+
+    @Override
+    public int purgeBefore(LocalDateTime threshold) {
+        return mapper.delete(new LambdaQueryWrapper<SysLoginLog>()
+                .lt(SysLoginLog::getCreateTime, threshold));
+    }
 }
