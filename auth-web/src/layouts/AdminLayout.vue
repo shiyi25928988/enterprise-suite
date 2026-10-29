@@ -11,6 +11,23 @@ const roles = computed(() =>
   (auth.user?.authorities || []).map((a) => (typeof a === 'string' ? a : a.authority)),
 )
 
+// Console entries are admin-only; the portal stays visible for everyone so a
+// non-admin still has a landing page after login.
+const menu = computed(() => {
+  const items = [{ to: '/portal', label: '我的应用' }]
+  if (auth.isAdmin) {
+    items.push(
+      { to: '/users', label: '用户管理' },
+      { to: '/orgs', label: '组织管理' },
+      { to: '/roles', label: '角色管理' },
+      { to: '/apps', label: '应用接入' },
+      { to: '/sync', label: '目录同步' },
+      { to: '/security', label: '安全设置' },
+    )
+  }
+  return items
+})
+
 onMounted(() => {
   if (!auth.user) auth.fetchMe().catch(() => {})
 })
@@ -26,11 +43,7 @@ async function logout() {
     <aside class="sidebar">
       <div class="logo">Enterprise Suite</div>
       <nav>
-        <router-link to="/users">用户管理</router-link>
-        <router-link to="/orgs">组织管理</router-link>
-        <router-link to="/roles">角色管理</router-link>
-        <router-link to="/security">安全设置</router-link>
-        <router-link to="/sync">目录同步</router-link>
+        <router-link v-for="item in menu" :key="item.to" :to="item.to">{{ item.label }}</router-link>
       </nav>
     </aside>
     <div class="main">

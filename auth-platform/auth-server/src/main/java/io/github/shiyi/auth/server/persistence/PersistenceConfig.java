@@ -7,6 +7,9 @@ import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
 import com.nimbusds.jose.jwk.source.JWKSource;
 import com.nimbusds.jose.proc.SecurityContext;
 
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationRunner;
@@ -24,6 +27,7 @@ import org.springframework.security.oauth2.server.authorization.client.JdbcRegis
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClient;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClientRepository;
 import org.springframework.security.config.annotation.web.configuration.OAuth2AuthorizationServerConfiguration;
+import org.springframework.security.jackson.SecurityJacksonModules;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.server.authorization.client.InMemoryRegisteredClientRepository;
 import org.springframework.security.oauth2.server.authorization.settings.ClientSettings;
@@ -133,7 +137,27 @@ public class PersistenceConfig {
     @ConditionalOnProperty(name = "spring.datasource.url")
     OAuth2AuthorizationService jdbcOAuth2AuthorizationService(
             org.springframework.jdbc.core.JdbcTemplate jdbc, RegisteredClientRepository clients) {
-        return new JdbcOAuth2AuthorizationService(jdbc, clients);
+        var service = new JdbcOAuth2AuthorizationService(jdbc, clients);
+        // The authorization row embeds the signed-in principal (PlatformUser) and
+        // the granted authorities as JSON with type ids. The default mapper only
+        // allowlists Spring Security's own types, so reading the row back failed
+        // with "PolymorphicTypeValidator denied resolution" (HTTP 500 on consent
+        // submission). Widen the allowlist to our own package; java.util's
+        // immutable collections are needed because principals are built with List.of.
+        var ptv = BasicPolymorphicTypeValidator.builder()
+                .allowIfSubType("io.github.shiyi.auth.")
+                .allowIfSubType("java.util.ImmutableCollections$");
+        var jsonMapper = JsonMapper.builder()
+                .addModules(SecurityJacksonModules.getModules(
+                        PersistenceConfig.class.getClassLoader(), ptv))
+                .build();
+        service.setAuthorizationRowMapper(
+                new JdbcOAuth2AuthorizationService.JsonMapperOAuth2AuthorizationRowMapper(
+                        clients, jsonMapper));
+        service.setAuthorizationParametersMapper(
+                new JdbcOAuth2AuthorizationService.JsonMapperOAuth2AuthorizationParametersMapper(
+                        jsonMapper));
+        return service;
     }
 
     @Bean

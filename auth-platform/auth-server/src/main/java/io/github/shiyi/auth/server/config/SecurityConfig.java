@@ -58,13 +58,19 @@ public class SecurityConfig {
     /** ① SAS protocol endpoints. */
     @Bean
     @Order(1)
-    SecurityFilterChain authorizationServerSecurityFilterChain(HttpSecurity http) throws Exception {
+    SecurityFilterChain authorizationServerSecurityFilterChain(
+            HttpSecurity http, io.github.shiyi.auth.server.app.AppAccessFilter appAccessFilter)
+            throws Exception {
         // Security 7: no static factory any more, the configurer is instantiated directly.
         OAuth2AuthorizationServerConfigurer authorizationServer = new OAuth2AuthorizationServerConfigurer();
 
         http.securityMatcher(authorizationServer.getEndpointsMatcher())
             .with(authorizationServer, configurer -> configurer.oidc(Customizer.withDefaults()))
             .authorizeHttpRequests(authorize -> authorize.anyRequest().authenticated())
+            // Role → application gate: must run once the security context is loaded
+            // (authentication is already resolved on the returning authorize call)
+            // but before the protocol endpoints issue codes.
+            .addFilterAfter(appAccessFilter, org.springframework.security.web.context.SecurityContextHolderFilter.class)
             // Unauthenticated browser requests redirect to /login; API clients get 401.
             .exceptionHandling(e -> e.defaultAuthenticationEntryPointFor(
                     new LoginUrlAuthenticationEntryPoint("/login"),
@@ -100,19 +106,26 @@ public class SecurityConfig {
         return http.build();
     }
 
-    /** ③ Login / consent pages: default generated pages until the auth-ui SPA lands (M4). */
+    /** ③ SPA shell: /login, /403 and static assets are public; everything else needs a session. */
     @Bean
     @Order(3)
     SecurityFilterChain defaultSecurityFilterChain(HttpSecurity http) throws Exception {
         http.authorizeHttpRequests(authorize -> authorize
-                .requestMatchers("/login", "/error", "/assets/**").permitAll()
+                .requestMatchers("/login", "/index.html", "/error", "/assets/**", "/403",
+                        "/callback", "/wecom-callback").permitAll()
                 // probe endpoints: liveness/readiness must not require a session;
                 // prometheus must be reachable by the scraper — restrict via network
                 // policy in production, the payload contains request-URI metrics
                 .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info",
                         "/actuator/prometheus").permitAll()
                 .anyRequest().authenticated())
-            .formLogin(Customizer.withDefaults());
+            // The login screen is the SPA's own page (it posts JSON to /api/auth/login),
+            // so the generated form-login page is switched off; unauthenticated
+            // navigations are redirected to /login instead.
+            .formLogin(form -> form.disable())
+            .exceptionHandling(e -> e.defaultAuthenticationEntryPointFor(
+                    new LoginUrlAuthenticationEntryPoint("/login"),
+                    new MediaTypeRequestMatcher(MediaType.TEXT_HTML)));
         return http.build();
     }
 

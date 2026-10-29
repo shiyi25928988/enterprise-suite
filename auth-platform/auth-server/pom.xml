@@ -92,6 +92,19 @@
     </dependencies>
 
     <build>
+        <!-- SPA console: the Vite build output (auth-web/dist) is packaged under
+             static/ so the platform can be deployed as a single port. The
+             resource directory is skipped silently when the frontend has not been
+             built yet (backend-only builds keep working). -->
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+            </resource>
+            <resource>
+                <directory>${project.basedir}/../../auth-web/dist</directory>
+                <targetPath>static</targetPath>
+            </resource>
+        </resources>
         <plugins>
             <plugin>
                 <groupId>org.springframework.boot</groupId>
