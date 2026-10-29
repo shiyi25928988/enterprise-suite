@@ -19,6 +19,42 @@ export const assignUserRoles = (id, roleIds) =>
 export const resetUserPassword = (id, newPassword) =>
   http.post(`/api/v1/users/${id}/reset-password`, { newPassword })
 
+// 用户批量导入/导出（xlsx）
+export const exportUsers = (params) =>
+  http
+    .get('/api/v1/users/export', { params, responseType: 'blob' })
+    .then((r) => {
+      const url = URL.createObjectURL(r.data)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `users_${new Date().toISOString().slice(0, 10)}.xlsx`
+      a.click()
+      URL.revokeObjectURL(url)
+    })
+
+export const downloadImportTemplate = () =>
+  http
+    .get('/api/v1/users/import-template', { responseType: 'blob' })
+    .then((r) => {
+      const url = URL.createObjectURL(r.data)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'user_import_template.xlsx'
+      a.click()
+      URL.revokeObjectURL(url)
+    })
+
+export const importUsers = (file) => {
+  const form = new FormData()
+  form.append('file', file)
+  return http
+    .post('/api/v1/users/import', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 120_000, // 大文件导入的行级校验+写库较慢，放宽超时
+    })
+    .then((r) => r.data.data)
+}
+
 // ---------- orgs ----------
 export const orgTree = () =>
   http.get('/api/v1/orgs/tree').then((r) => r.data.data)

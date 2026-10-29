@@ -4,6 +4,7 @@ import Modal from '../../components/Modal.vue'
 import {
   pageUsers, createUser, updateUser, changeUserStatus,
   assignUserRoles, resetUserPassword, listRoles, orgTree,
+  exportUsers, downloadImportTemplate, importUsers,
 } from '../../api/admin'
 
 // ---------- list state ----------
@@ -138,6 +139,50 @@ async function toggleStatus(row) {
   }
 }
 
+// ---------- batch export / import ----------
+const exporting = ref(false)
+
+async function doExport() {
+  exporting.value = true
+  error.value = ''
+  try {
+    const params = {}
+    if (query.keyword) params.keyword = query.keyword
+    if (query.orgId) params.orgId = query.orgId
+    if (query.status !== null && query.status !== '') params.status = query.status
+    await exportUsers(params)
+  } catch (e) {
+    error.value = `导出失败：${e.message}`
+  } finally {
+    exporting.value = false
+  }
+}
+
+const showImport = ref(false)
+const importFile = ref(null)
+const importing = ref(false)
+const importResult = ref(null)
+
+function onImportFile(e) {
+  importFile.value = e.target.files[0] || null
+  importResult.value = null
+}
+
+async function submitImport() {
+  if (!importFile.value) return
+  importing.value = true
+  error.value = ''
+  try {
+    importResult.value = await importUsers(importFile.value)
+    load()
+  } catch (e) {
+    // blob/JSON 错误统一处理：后端校验失败返回 JSON，axios blob 下需手动解析
+    error.value = e.message
+  } finally {
+    importing.value = false
+  }
+}
+
 onMounted(async () => {
   load()
   listRoles().then((r) => (roles.value = r)).catch(() => {})
@@ -160,7 +205,9 @@ onMounted(async () => {
         <option value="2">锁定</option>
       </select>
       <button style="width: auto; margin: 0; padding: 8px 18px;" @click="search">查询</button>
-      <button style="width: auto; margin: 0 0 0 auto; padding: 8px 18px;" @click="openCreate">+ 新增用户</button>
+      <button style="width: auto; margin: 0 0 0 auto; padding: 8px 18px;" :disabled="exporting" @click="doExport">{{ exporting ? '导出中…' : '导出 Excel' }}</button>
+      <button style="width: auto; margin: 0; padding: 8px 18px;" @click="showImport = true">批量导入</button>
+      <button style="width: auto; margin: 0; padding: 8px 18px;" @click="openCreate">+ 新增用户</button>
     </div>
     <p v-if="error" class="error">{{ error }}</p>
 
@@ -246,6 +293,35 @@ onMounted(async () => {
     <label>新密码（≥8 位，含至少 3 类字符）</label>
     <input v-model="newPassword" type="password" />
     <button @click="submitPwd">确认重置</button>
+  </Modal>
+
+  <Modal v-if="showImport" title="批量导入用户" @close="showImport = false">
+    <p class="muted" style="margin-top: 0;">
+      1. 下载模板 → 2. 按说明填写 → 3. 上传 xlsx 文件。
+      导入按行校验，<b>成功的行会创建，失败的行会在下方列出原因</b>，单次上限 5000 行。
+    </p>
+    <p><a @click.prevent="downloadImportTemplate()">下载导入模板</a></p>
+    <label>选择文件（.xlsx，≤5MB）</label>
+    <input type="file" accept=".xlsx" @change="onImportFile" />
+    <button :disabled="!importFile || importing" @click="submitImport">
+      {{ importing ? '导入中…' : '开始导入' }}
+    </button>
+
+    <div v-if="importResult" style="margin-top: 14px;">
+      <p>
+        共 <b>{{ importResult.total }}</b> 行：
+        <span style="color: #166534;">成功 {{ importResult.succeeded }}</span>，
+        <span style="color: #991b1b;">失败 {{ importResult.failed }}</span>
+      </p>
+      <table v-if="importResult.errors?.length">
+        <thead><tr><th>行号</th><th>用户名</th><th>失败原因</th></tr></thead>
+        <tbody>
+          <tr v-for="e in importResult.errors" :key="e.row">
+            <td>{{ e.row }}</td><td>{{ e.username || '—' }}</td><td>{{ e.reason }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
   </Modal>
 </template>
 

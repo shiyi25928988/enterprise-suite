@@ -17,12 +17,17 @@ const http = axios.create({
 /** Response interceptor: unwrap the ApiResult envelope, normalize errors. */
 http.interceptors.response.use(
   (resp) => resp,
-  (error) => {
+  async (error) => {
     const resp = error.response
-    const apiError = new Error(resp?.data?.message || error.message || 'Network error')
-    apiError.code = resp?.data?.code
+    // responseType: 'blob' 时错误体也是 Blob，需解析出 JSON 才能拿到业务 message
+    let data = resp?.data
+    if (data instanceof Blob && data.type.includes('json')) {
+      try { data = JSON.parse(await data.text()) } catch { /* keep blob */ }
+    }
+    const apiError = new Error(data?.message || error.message || 'Network error')
+    apiError.code = data?.code
     apiError.status = resp?.status
-    apiError.data = resp?.data?.data // e.g. {challengeId} on MFA_REQUIRED
+    apiError.data = data?.data // e.g. {challengeId} on MFA_REQUIRED
     return Promise.reject(apiError)
   },
 )

@@ -103,6 +103,18 @@ public class UserDomainConfig {
         return new InMemoryUserService();
     }
 
+    // ---------- user batch import / export (xlsx, jdbc mode only) ----------
+
+    @Bean
+    @ConditionalOnProperty(name = "spring.datasource.url")
+    io.github.shiyi.auth.user.service.UserImportExportService userImportExportService(
+            SysUserMapper userMapper, SysOrgMapper orgMapper, SysRoleMapper roleMapper,
+            SysUserRoleMapper userRoleMapper,
+            org.springframework.transaction.PlatformTransactionManager txManager) {
+        return new io.github.shiyi.auth.user.service.UserImportExportService(
+                userMapper, orgMapper, roleMapper, userRoleMapper, txManager);
+    }
+
     // ---------- organization ----------
 
     @Bean

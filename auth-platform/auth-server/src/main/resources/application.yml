@@ -17,6 +17,11 @@ spring:
           max-active: 16
           max-idle: 8
           min-idle: 2
+  servlet:
+    multipart:
+      # user import xlsx uploads
+      max-file-size: 5MB
+      max-request-size: 6MB
 
 server:
   port: 9000
