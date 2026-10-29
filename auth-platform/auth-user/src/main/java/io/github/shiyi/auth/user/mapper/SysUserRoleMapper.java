@@ -21,4 +21,14 @@ public interface SysUserRoleMapper extends BaseMapper<SysUserRole> {
             </script>
             """)
     java.util.List<SysUserRole> selectByUserIds(@Param("userIds") java.util.Collection<Long> userIds);
+
+    /** id + code + name of every role a user holds — detail view / userinfo claims. */
+    @Select("""
+            SELECT r.id, r.role_code, r.role_name
+            FROM sys_role r
+            JOIN sys_user_role ur ON ur.role_id = r.id
+            WHERE ur.user_id = #{userId} AND r.deleted = 0
+            ORDER BY r.id
+            """)
+    java.util.List<java.util.Map<String, Object>> selectRoleDetailsByUserId(@Param("userId") Long userId);
 }

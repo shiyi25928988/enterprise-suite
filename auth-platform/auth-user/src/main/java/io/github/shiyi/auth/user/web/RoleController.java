@@ -3,6 +3,7 @@ package io.github.shiyi.auth.user.web;
 import jakarta.validation.Valid;
 
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -39,6 +40,13 @@ public class RoleController {
         return ApiResult.ok(roleService.list());
     }
 
+    /** Reference statistics per role (user count / app count / built-in flag). */
+    @GetMapping("/usage")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ApiResult<List<io.github.shiyi.auth.user.dto.RoleUsageDTO>> usage() {
+        return ApiResult.ok(roleService.usage());
+    }
+
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
     public ApiResult<SysRole> create(@Valid @RequestBody RoleRequest request) {
@@ -54,5 +62,12 @@ public class RoleController {
                 (String) body.get("roleName"),
                 body.get("dataScope") == null ? null : ((Number) body.get("dataScope")).intValue(),
                 body.get("status") == null ? null : ((Number) body.get("status")).intValue()));
+    }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ApiResult<Void> delete(@PathVariable Long id) {
+        roleService.delete(id);
+        return ApiResult.ok();
     }
 }

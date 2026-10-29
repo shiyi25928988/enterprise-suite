@@ -26,6 +26,15 @@ public interface UserService {
      */
     PageResult<UserDTO> page(int page, int size, String keyword, Long orgId, Integer status);
 
+    /** Full profile for the admin detail view (contact fields, org name, role names). */
+    io.github.shiyi.auth.user.dto.UserDetailDTO detail(Long id);
+
+    /**
+     * Moves the user to another organization. {@code orgId = null} clears the
+     * assignment; a non-null id must reference an existing org.
+     */
+    void moveOrg(Long id, Long orgId);
+
     UserDTO create(UserCreateRequest request);
 
     UserDTO update(Long id, UserUpdateRequest request);

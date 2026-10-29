@@ -59,6 +59,40 @@ public class JdbcUserService implements UserService {
     }
 
     @Override
+    public io.github.shiyi.auth.user.dto.UserDetailDTO detail(Long id) {
+        SysUser user = requireUser(id);
+        SysOrg org = user.getOrgId() == null ? null : orgMapper.selectById(user.getOrgId());
+        List<io.github.shiyi.auth.user.dto.UserDetailDTO.RoleRef> roles =
+                userRoleMapper.selectRoleDetailsByUserId(id).stream()
+                        .map(r -> new io.github.shiyi.auth.user.dto.UserDetailDTO.RoleRef(
+                                ((Number) r.get("id")).longValue(),
+                                (String) r.get("role_code"),
+                                (String) r.get("role_name")))
+                        .toList();
+        return new io.github.shiyi.auth.user.dto.UserDetailDTO(
+                user.getId(), user.getUsername(), user.getRealName(),
+                user.getEmployeeNo(), user.getMobile(), user.getEmail(),
+                user.getOrgId(), org == null ? null : org.getOrgName(),
+                org == null ? null : org.getOrgPath(),
+                user.getSource(), user.getStatus(), user.getMfaEnabled(),
+                user.getMustChangePassword(), user.getLastLoginTime(),
+                user.getPasswordUpdateTime(), user.getCreateTime(), user.getUpdateTime(),
+                roles);
+    }
+
+    @Override
+    @Transactional
+    public void moveOrg(Long id, Long orgId) {
+        SysUser user = requireUser(id);
+        if (orgId != null && orgMapper.selectById(orgId) == null) {
+            throw new BizException(ErrorCode.NOT_FOUND, "organization not found: " + orgId);
+        }
+        userMapper.update(null, new LambdaUpdateWrapper<SysUser>()
+                .eq(SysUser::getId, id)
+                .set(SysUser::getOrgId, orgId));
+    }
+
+    @Override
     public List<UserDTO> findAll() {
         return toDtos(userMapper.selectList(new LambdaQueryWrapper<SysUser>()
                 .orderByAsc(SysUser::getId)));

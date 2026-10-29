@@ -60,13 +60,39 @@ public class SecurityConfig {
     @Order(1)
     SecurityFilterChain authorizationServerSecurityFilterChain(
             HttpSecurity http, io.github.shiyi.auth.server.app.AppAccessFilter appAccessFilter,
-            tools.jackson.databind.ObjectMapper objectMapper)
+            tools.jackson.databind.ObjectMapper objectMapper,
+            io.github.shiyi.auth.user.account.UserAccountService accounts)
             throws Exception {
         // Security 7: no static factory any more, the configurer is instantiated directly.
         OAuth2AuthorizationServerConfigurer authorizationServer = new OAuth2AuthorizationServerConfigurer();
 
         http.securityMatcher(authorizationServer.getEndpointsMatcher())
-            .with(authorizationServer, configurer -> configurer.oidc(Customizer.withDefaults()))
+            .with(authorizationServer, configurer -> configurer.oidc(oidc -> oidc
+                    // Default /userinfo only echoes {sub}. Clients (e.g. the WMS SPA)
+                    // need display name + role codes to render without a second API.
+                    .userInfoEndpoint(userInfo -> userInfo.userInfoMapper(context -> {
+                        var authentication = context.getAuthentication();
+                        // The userinfo call is bearer-token authenticated, so the
+                        // principal is a JwtAuthenticationToken (not the session's
+                        // PlatformUser) — resolve the account by the token subject.
+                        String username = authentication == null ? null : authentication.getName();
+                        if (authentication != null
+                                && authentication.getPrincipal() instanceof org.springframework.security.oauth2.jwt.Jwt jwt) {
+                            username = jwt.getSubject();
+                        }
+                        if (username == null) {
+                            return new org.springframework.security.oauth2.core.oidc.OidcUserInfo(
+                                    java.util.Map.of("sub", "unknown"));
+                        }
+                        java.util.Map<String, Object> claims = new java.util.LinkedHashMap<>();
+                        claims.put("sub", username);
+                        claims.put("preferred_username", username);
+                        accounts.findByUsername(username).ifPresent(account -> {
+                            claims.put("name", account.realName());
+                            claims.put("roles", accounts.findRoleCodes(account.id()));
+                        });
+                        return new org.springframework.security.oauth2.core.oidc.OidcUserInfo(claims);
+                    }))))
             .authorizeHttpRequests(authorize -> authorize.anyRequest().authenticated())
             // Role → application gate: must run once the security context is loaded
             // (authentication is already resolved on the returning authorize call)

@@ -23,6 +23,7 @@ const menu = computed(() => {
       { to: '/apps', label: '应用接入' },
       { to: '/sessions', label: '在线会话' },
       { to: '/sync', label: '目录同步' },
+      { to: '/audit', label: '操作日志' },
       { to: '/security', label: '安全设置' },
     )
   }

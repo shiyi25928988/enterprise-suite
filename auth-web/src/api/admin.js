@@ -19,6 +19,12 @@ export const assignUserRoles = (id, roleIds) =>
 export const resetUserPassword = (id, newPassword) =>
   http.post(`/api/v1/users/${id}/reset-password`, { newPassword })
 
+export const getUserDetail = (id) =>
+  http.get(`/api/v1/users/${id}/detail`).then((r) => r.data.data)
+
+export const moveUserOrg = (id, orgId) =>
+  http.patch(`/api/v1/users/${id}/org`, { orgId })
+
 // 用户批量导入/导出（xlsx）
 export const exportUsers = (params) =>
   http
@@ -76,6 +82,16 @@ export const createRole = (body) =>
 
 export const updateRole = (id, body) =>
   http.put(`/api/v1/roles/${id}`, body).then((r) => r.data.data)
+
+export const roleUsage = () =>
+  http.get('/api/v1/roles/usage').then((r) => r.data.data)
+
+export const deleteRole = (id) =>
+  http.delete(`/api/v1/roles/${id}`)
+
+// ---------- management operation audit ----------
+export const pageOperationLogs = (params) =>
+  http.get('/api/v1/operation-logs', { params }).then((r) => r.data.data)
 
 // ---------- directory sync (WeCom / DingTalk) ----------
 export const listSyncSources = () =>

@@ -22,10 +22,14 @@ import io.github.shiyi.auth.user.dto.OrgDTO;
 import io.github.shiyi.auth.user.dto.RoleRequest;
 import io.github.shiyi.auth.user.entity.SysRole;
 import io.github.shiyi.auth.user.mapper.SysLoginLogMapper;
+import io.github.shiyi.auth.user.mapper.SysOperationLogMapper;
 import io.github.shiyi.auth.user.service.InMemoryLoginLogService;
 import io.github.shiyi.auth.user.service.JdbcLoginLogService;
+import io.github.shiyi.auth.user.service.InMemoryOperationLogService;
+import io.github.shiyi.auth.user.service.JdbcOperationLogService;
 import io.github.shiyi.auth.user.service.LoginLogService;
 import io.github.shiyi.auth.user.service.LoginLogRetention;
+import io.github.shiyi.auth.user.service.OperationLogService;
 import io.github.shiyi.auth.user.mapper.SysOrgMapper;
 import io.github.shiyi.auth.user.mapper.SysRoleMapper;
 import io.github.shiyi.auth.user.mapper.SysUserMapper;
@@ -164,8 +168,9 @@ public class UserDomainConfig {
 
     @Bean
     @ConditionalOnProperty(name = "spring.datasource.url")
-    RoleService jdbcRoleService(SysRoleMapper roleMapper) {
-        return new JdbcRoleService(roleMapper);
+    RoleService jdbcRoleService(SysRoleMapper roleMapper, SysUserRoleMapper userRoleMapper,
+                                org.springframework.jdbc.core.JdbcTemplate jdbc) {
+        return new JdbcRoleService(roleMapper, userRoleMapper, jdbc);
     }
 
     @Bean
@@ -184,6 +189,14 @@ public class UserDomainConfig {
             }
 
             @Override
+            public List<io.github.shiyi.auth.user.dto.RoleUsageDTO> usage() {
+                return list().stream()
+                        .map(r -> new io.github.shiyi.auth.user.dto.RoleUsageDTO(r.getId(), 0, 0,
+                                "ADMIN".equals(r.getRoleCode())))
+                        .toList();
+            }
+
+            @Override
             public SysRole create(RoleRequest request) {
                 throw readOnly();
             }
@@ -193,12 +206,37 @@ public class UserDomainConfig {
                 throw readOnly();
             }
 
+            @Override
+            public void delete(Long id) {
+                throw readOnly();
+            }
+
             private io.github.shiyi.auth.common.exception.BizException readOnly() {
                 return new io.github.shiyi.auth.common.exception.BizException(
                         io.github.shiyi.auth.common.api.ErrorCode.BAD_REQUEST,
                         "in-memory mode is read-only; start with the jdbc profile to mutate");
             }
         };
+    }
+
+    // ---------- management operation audit ----------
+
+    @Bean
+    @ConditionalOnProperty(name = "spring.datasource.url")
+    OperationLogService jdbcOperationLogService(SysOperationLogMapper mapper) {
+        return new JdbcOperationLogService(mapper);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(OperationLogService.class)
+    OperationLogService inMemoryOperationLogService() {
+        return new InMemoryOperationLogService();
+    }
+
+    /** Registered as a bean so Boot applies it to every security chain (filters to /api writes only). */
+    @Bean
+    org.springframework.web.filter.OncePerRequestFilter operationAuditFilter(OperationLogService operationLogs) {
+        return new io.github.shiyi.auth.user.web.OperationAuditFilter(operationLogs);
     }
 
     // ---------- login audit ----------

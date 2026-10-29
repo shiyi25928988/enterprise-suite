@@ -45,8 +45,10 @@ public class LoginFailureHandler implements AuthenticationFailureHandler {
         ApiResult<Void> body;
         if (exception instanceof org.springframework.security.authentication.CredentialsExpiredException) {
             body = ApiResult.fail(ErrorCode.PASSWORD_EXPIRED);
-        } else if (exception instanceof LockedException || exception instanceof DisabledException
-                || exception instanceof AccountStatusException) {
+        } else if (exception instanceof DisabledException) {
+            // distinguish "admin disabled this account" from "locked by failed attempts"
+            body = ApiResult.fail(ErrorCode.ACCOUNT_LOCKED, "账号已禁用（Account is disabled）");
+        } else if (exception instanceof LockedException || exception instanceof AccountStatusException) {
             body = ApiResult.fail(ErrorCode.ACCOUNT_LOCKED);
         } else if (exception instanceof BadCredentialsException) {
             body = ApiResult.fail(ErrorCode.BAD_CREDENTIALS);

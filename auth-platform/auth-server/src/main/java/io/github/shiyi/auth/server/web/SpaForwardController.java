@@ -34,6 +34,7 @@ public class SpaForwardController {
             "/sessions",
             "/sync",
             "/security",
+            "/audit",
     })
     public String forward() {
         return "forward:/index.html";

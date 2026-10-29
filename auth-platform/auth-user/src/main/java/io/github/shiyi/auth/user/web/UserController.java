@@ -60,6 +60,24 @@ public class UserController {
                         io.github.shiyi.auth.common.api.ErrorCode.NOT_FOUND)));
     }
 
+    /** Full profile: contact fields, org name/path, role names, lifecycle timestamps. */
+    @GetMapping("/{id}/detail")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ApiResult<io.github.shiyi.auth.user.dto.UserDetailDTO> fullDetail(@PathVariable Long id) {
+        return ApiResult.ok(userService.detail(id));
+    }
+
+    /** body: {"orgId": 5 | null} — move the user to another organization. */
+    @PatchMapping("/{id}/org")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ApiResult<Void> moveOrg(@PathVariable Long id,
+                                   @RequestBody Map<String, Object> body) {
+        Object raw = body.get("orgId");
+        Long orgId = raw == null ? null : ((Number) raw).longValue();
+        userService.moveOrg(id, orgId);
+        return ApiResult.ok();
+    }
+
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
     public ApiResult<UserDTO> create(@Valid @RequestBody UserCreateRequest request) {

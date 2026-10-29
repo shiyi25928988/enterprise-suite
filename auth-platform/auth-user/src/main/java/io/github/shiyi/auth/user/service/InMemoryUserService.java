@@ -43,6 +43,25 @@ public class InMemoryUserService implements UserService {
     }
 
     @Override
+    public io.github.shiyi.auth.user.dto.UserDetailDTO detail(Long id) {
+        UserDTO u = store.get(id);
+        if (u == null) {
+            throw new BizException(ErrorCode.NOT_FOUND, "user not found: " + id);
+        }
+        return new io.github.shiyi.auth.user.dto.UserDetailDTO(u.id(), u.username(), u.realName(),
+                null, null, null, u.orgId(), null, null, 1, u.status(), 0, 0,
+                u.lastLoginAt(), null, null, null,
+                u.roleIds().stream()
+                        .map(rid -> new io.github.shiyi.auth.user.dto.UserDetailDTO.RoleRef(rid, null, null))
+                        .toList());
+    }
+
+    @Override
+    public void moveOrg(Long id, Long orgId) {
+        throw readOnly();
+    }
+
+    @Override
     public List<UserDTO> findAll() {
         return List.copyOf(store.values());
     }

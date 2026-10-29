@@ -5,6 +5,7 @@ import {
   pageUsers, createUser, updateUser, changeUserStatus,
   assignUserRoles, resetUserPassword, listRoles, orgTree,
   exportUsers, downloadImportTemplate, importUsers,
+  getUserDetail, moveUserOrg,
 } from '../../api/admin'
 
 // ---------- list state ----------
@@ -183,6 +184,44 @@ async function submitImport() {
   }
 }
 
+// ---------- user detail (full profile + org move) ----------
+const showDetail = ref(false)
+const detail = ref(null)
+const detailLoading = ref(false)
+const moveOrgId = ref(undefined) // undefined = untouched, null = 未分配
+
+async function openDetail(row) {
+  showDetail.value = true
+  detail.value = null
+  detailLoading.value = true
+  moveOrgId.value = undefined
+  error.value = ''
+  try {
+    detail.value = await getUserDetail(row.id)
+  } catch (e) {
+    error.value = e.message
+    showDetail.value = false
+  } finally {
+    detailLoading.value = false
+  }
+}
+
+const moveDirty = computed(() => moveOrgId.value !== undefined)
+
+async function submitMove() {
+  if (!detail.value) return
+  error.value = ''
+  try {
+    await moveUserOrg(detail.value.id, moveOrgId.value)
+    showDetail.value = false
+    load()
+  } catch (e) {
+    error.value = e.message
+  }
+}
+
+const SOURCE = { 1: '本地', 2: 'LDAP', 3: '企业微信', 4: '钉钉' }
+
 onMounted(async () => {
   load()
   listRoles().then((r) => (roles.value = r)).catch(() => {})
@@ -229,6 +268,7 @@ onMounted(async () => {
           </td>
           <td class="muted">{{ row.lastLoginAt || '—' }}</td>
           <td class="actions">
+            <a @click.prevent="openDetail(row)">详情</a>
             <a @click.prevent="openEdit(row)">编辑</a>
             <a @click.prevent="openRoles(row)">角色</a>
             <a @click.prevent="openPwd(row)">重置密码</a>
@@ -295,6 +335,43 @@ onMounted(async () => {
     <button @click="submitPwd">确认重置</button>
   </Modal>
 
+  <Modal v-if="showDetail" :title="`用户详情：${detail?.username || '…'}`" @close="showDetail = false">
+    <p v-if="detailLoading" class="muted">加载中…</p>
+    <template v-else-if="detail">
+      <table class="detail">
+        <tbody>
+          <tr><th>用户名</th><td>{{ detail.username }}</td></tr>
+          <tr><th>姓名</th><td>{{ detail.realName || '—' }}</td></tr>
+          <tr><th>工号</th><td>{{ detail.employeeNo || '—' }}</td></tr>
+          <tr><th>手机号</th><td>{{ detail.mobile || '—' }}</td></tr>
+          <tr><th>邮箱</th><td>{{ detail.email || '—' }}</td></tr>
+          <tr><th>来源</th><td>{{ SOURCE[detail.source] || detail.source }}</td></tr>
+          <tr><th>状态</th><td><span :class="['badge', `s${detail.status}`]">{{ STATUS[detail.status] || detail.status }}</span></td></tr>
+          <tr><th>强制改密</th><td>{{ detail.mustChangePassword === 1 ? '是（尚未替换初始密码）' : '否' }}</td></tr>
+          <tr><th>MFA</th><td>{{ detail.mfaEnabled === 1 ? '已启用 TOTP' : '未启用' }}</td></tr>
+          <tr><th>组织</th><td>{{ detail.orgName || '未分配' }}<span v-if="detail.orgPath" class="muted">（{{ detail.orgPath }}）</span></td></tr>
+          <tr><th>角色</th><td>
+            <span v-if="!detail.roles?.length" class="muted">无</span>
+            <span v-for="r in detail.roles" :key="r.id" class="role-chip">{{ r.name || r.code || ('#' + r.id) }}</span>
+          </td></tr>
+          <tr><th>最后登录</th><td class="muted">{{ detail.lastLoginAt || '从未登录' }}</td></tr>
+          <tr><th>密码更新时间</th><td class="muted">{{ detail.passwordUpdatedAt || '—' }}</td></tr>
+          <tr><th>创建时间</th><td class="muted">{{ detail.createTime || '—' }}</td></tr>
+        </tbody>
+      </table>
+
+      <label style="margin-top: 14px;">移动组织</label>
+      <div style="display: flex; gap: 10px;">
+        <select v-model="moveOrgId" style="flex: 1;">
+          <option :value="undefined" disabled>选择目标组织（当前：{{ detail.orgName || '未分配' }}）</option>
+          <option :value="null">未分配</option>
+          <option v-for="o in orgOptions" :key="o.id" :value="o.id">{{ o.orgName }}</option>
+        </select>
+        <button type="button" style="width: auto; margin: 0; padding: 8px 18px;" :disabled="!moveDirty" @click="submitMove">移动</button>
+      </div>
+    </template>
+  </Modal>
+
   <Modal v-if="showImport" title="批量导入用户" @close="showImport = false">
     <p class="muted" style="margin-top: 0;">
       1. 下载模板 → 2. 按说明填写 → 3. 上传 xlsx 文件。
@@ -339,4 +416,8 @@ th { color: var(--muted); font-weight: 500; }
 .pager { display: flex; gap: 12px; align-items: center; margin-top: 14px; }
 .checkboxes { display: flex; flex-direction: column; gap: 4px; }
 label.inline { display: flex; align-items: center; gap: 8px; }
+table.detail { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.detail th { width: 110px; text-align: left; padding: 6px 8px; color: var(--muted); font-weight: 500; vertical-align: top; border-bottom: 1px solid var(--border); }
+table.detail td { padding: 6px 8px; border-bottom: 1px solid var(--border); }
+.role-chip { display: inline-block; padding: 2px 10px; margin: 0 6px 4px 0; background: var(--bg, #f1f5f9); border: 1px solid var(--border); border-radius: 10px; font-size: 12px; }
 </style>

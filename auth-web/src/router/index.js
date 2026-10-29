@@ -23,9 +23,12 @@ const routes = [
       { path: 'sessions', name: 'sessions', component: () => import('../views/admin/SessionsView.vue'), meta: { requiresAdmin: true } },
       { path: 'security', name: 'security', component: () => import('../views/admin/SecurityView.vue'), meta: { requiresAdmin: true } },
       { path: 'sync', name: 'sync', component: () => import('../views/admin/SyncView.vue'), meta: { requiresAdmin: true } },
+      { path: 'audit', name: 'audit', component: () => import('../views/admin/AuditView.vue'), meta: { requiresAdmin: true } },
     ],
   },
   { path: '/403', name: 'forbidden', component: () => import('../views/ForbiddenView.vue'), meta: { bare: true } },
+  // unmatched paths → 404 page (full page, no console chrome)
+  { path: '/:pathMatch(.*)*', name: 'not-found', component: () => import('../views/NotFoundView.vue'), meta: { bare: true } },
 ]
 
 const router = createRouter({ history: createWebHistory(), routes })

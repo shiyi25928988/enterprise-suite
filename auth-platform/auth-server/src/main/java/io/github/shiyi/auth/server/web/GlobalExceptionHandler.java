@@ -51,6 +51,38 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResult.fail(ErrorCode.FORBIDDEN));
     }
 
+    /**
+     * Unmatched navigation-style GET paths are forwarded to the SPA shell so
+     * the Vue router can render its own 404 page — bookmarks of stale routes
+     * get a friendly page instead of a JSON 500. Unknown /api/** paths return
+     * a proper 404 envelope; everything else keeps the fallback behaviour.
+     *
+     * <p>The forward is done by hand because a view-name return value would
+     * be written as the response body inside a {@code @RestControllerAdvice}.</p>
+     */
+    @ExceptionHandler(org.springframework.web.servlet.resource.NoResourceFoundException.class)
+    public Object handleNoResource(org.springframework.web.servlet.resource.NoResourceFoundException e,
+                                   HttpServletRequest request,
+                                   jakarta.servlet.http.HttpServletResponse response)
+            throws jakarta.servlet.ServletException, java.io.IOException {
+        String path = request.getRequestURI();
+        if (path.startsWith("/api/")) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResult.fail(ErrorCode.NOT_FOUND));
+        }
+        boolean navigable = "GET".equalsIgnoreCase(request.getMethod())
+                && !path.contains(".")
+                && !path.startsWith("/oauth2/")
+                && !path.startsWith("/connect/")
+                && !path.startsWith("/actuator/")
+                && !path.startsWith("/assets/");
+        if (navigable) {
+            request.getRequestDispatcher("/index.html").forward(request, response);
+            return null;
+        }
+        return handleFallback(e, request);
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResult<Void>> handleFallback(Exception e, HttpServletRequest request) {
         log.error("unhandled exception on {} {}", request.getMethod(), request.getRequestURI(), e);
