@@ -35,6 +35,12 @@ management:
     health:
       probes:
         enabled: true
+  metrics:
+    distribution:
+      # Emit cumulative histogram buckets for http.server.requests so
+      # Prometheus histogram_quantile() can compute P95/P99 latency.
+      percentiles-histogram:
+        http.server.requests: true
 
 logging:
   level:

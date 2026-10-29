@@ -100,3 +100,97 @@ groups:
               intervalMs: 1000
               maxDataPoints: 43200
               type: threshold
+
+      - uid: auth-http-5xx-rate
+        title: HTTP 5xx 错误率过高 (auth-platform)
+        condition: C
+        for: 5m
+        noDataState: OK
+        annotations:
+          summary: 最近 5 分钟 5xx 响应占比超过 5%（不含 /actuator/prometheus），接口可能大面积异常
+        labels:
+          severity: warning
+        data:
+          - refId: A
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: prometheus
+            model:
+              datasource: { type: prometheus, uid: prometheus }
+              expr: 'sum(rate(http_server_requests_seconds_count{status=~"5..", uri!="/actuator/prometheus"}[5m])) / clamp_min(sum(rate(http_server_requests_seconds_count{uri!="/actuator/prometheus"}[5m])), 1e-9)'
+              instant: true
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator: { type: gt }
+                  operator: { type: and }
+                  query: { params: [A] }
+                  reducer: { params: [], type: last }
+              datasource: { type: __expr__, uid: __expr__ }
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              reducer: last
+              settings: { mode: dropNN }
+              type: reduce
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator: { params: [0.05], type: gt }
+                  operator: { type: and }
+                  query: { params: [B] }
+                  reducer: { params: [], type: gt }
+              datasource: { type: __expr__, uid: __expr__ }
+              expression: B
+              intervalMs: 1000
+              maxDataPoints: 43200
+              type: threshold
+
+      - uid: auth-http-p95-latency
+        title: 接口 P95 延迟过高 (auth-platform)
+        condition: C
+        for: 5m
+        noDataState: OK
+        annotations:
+          summary: 最近 5 分钟全接口 P95 延迟超过 1 秒，可能存在慢查询或资源瓶颈
+        labels:
+          severity: warning
+        data:
+          - refId: A
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: prometheus
+            model:
+              datasource: { type: prometheus, uid: prometheus }
+              expr: 'histogram_quantile(0.95, sum by (le) (rate(http_server_requests_seconds_bucket{uri!="/actuator/prometheus"}[5m])))'
+              instant: true
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator: { type: gt }
+                  operator: { type: and }
+                  query: { params: [A] }
+                  reducer: { params: [], type: last }
+              datasource: { type: __expr__, uid: __expr__ }
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              reducer: last
+              settings: { mode: dropNN }
+              type: reduce
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator: { params: [1], type: gt }
+                  operator: { type: and }
+                  query: { params: [B] }
+                  reducer: { params: [], type: gt }
+              datasource: { type: __expr__, uid: __expr__ }
+              expression: B
+              intervalMs: 1000
+              maxDataPoints: 43200
+              type: threshold
