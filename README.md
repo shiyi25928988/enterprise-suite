@@ -90,6 +90,24 @@ Not exercised (needs external infrastructure): AD/LDAP and WeCom providers
 | `kill -9` the JVM → restart → same session cookie | session restored from Redis, user still logged in |
 | Demo mode (no profile) after M6 wiring changes | unchanged: ~8 s boot, in-memory fallbacks active |
 
+### M6b: monitoring + audit + load (2026-10-29)
+
+- `/actuator/prometheus` (micrometer-registry-prometheus): JVM + HTTP request
+  metrics out of the box, plus `auth_login_total{result,type}` business counter
+  driven by Spring Security authentication events (covers password, MFA, LDAP,
+  WeCom paths via one listener). Restrict scraper access via network policy.
+- `GET /api/v1/login-logs` (ADMIN): paged audit query over `sys_login_log`
+  with `username` / `success` / `start` / `end` filters; capped at 200/page.
+- `bench/LoginBench.java`, `bench/GetBench.java`: single-file JDK 21 load tools.
+
+Measured against the LAN MySQL 8.4 + Redis server (bench and server on the
+same workstation, remote database):
+
+| Scenario | Result |
+|---|---|
+| Full login flow (csrf → login → me → logout, BCrypt + MySQL audit write + Redis session write), 32 workers × 3,200 flows | 54 flows/s, **zero failures**, P50 543 ms / P99 1.3 s |
+| Stateless OIDC reads (discovery document), 64 workers × 128,000 requests | **3,235 req/s**, zero errors, P50 16 ms / P99 102 ms |
+
 
 ### Frontend SPA (auth-web)
 
@@ -126,8 +144,10 @@ so browser traffic is same-origin — the same topology as production.
       enrollment UI under Security settings; per-user opt-in
 - [x] M6 cluster session store: Redis-backed HTTP session (`redis` profile),
       servlet-session timeout retained; JDBC profile verified against MySQL 8.4
+- [x] M6b hardening: Prometheus endpoint + auth metrics, login audit query API,
+      load verified (3.2k req/s reads, 54 full logins/s, zero failures)
 - [ ] M5c: DingTalk, badge QR, per-device token policies, anomaly detection
-- [ ] M6b hardening: load test (500+ TPS), audit reports, monitoring
+- [ ] M7: Grafana dashboard pack, scheduled audit cleanup, HR/AD user sync
 
 See the [development doc](docs/) (Chinese) for the full specification.
 

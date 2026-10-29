@@ -21,6 +21,9 @@ import io.github.shiyi.auth.user.dto.OrgDTO;
 import io.github.shiyi.auth.user.dto.RoleRequest;
 import io.github.shiyi.auth.user.entity.SysRole;
 import io.github.shiyi.auth.user.mapper.SysLoginLogMapper;
+import io.github.shiyi.auth.user.service.InMemoryLoginLogService;
+import io.github.shiyi.auth.user.service.JdbcLoginLogService;
+import io.github.shiyi.auth.user.service.LoginLogService;
 import io.github.shiyi.auth.user.mapper.SysOrgMapper;
 import io.github.shiyi.auth.user.mapper.SysRoleMapper;
 import io.github.shiyi.auth.user.mapper.SysUserMapper;
@@ -172,5 +175,19 @@ public class UserDomainConfig {
                         "in-memory mode is read-only; start with the jdbc profile to mutate");
             }
         };
+    }
+
+    // ---------- login audit ----------
+
+    @Bean
+    @ConditionalOnProperty(name = "spring.datasource.url")
+    LoginLogService jdbcLoginLogService(SysLoginLogMapper loginLogMapper) {
+        return new JdbcLoginLogService(loginLogMapper);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(LoginLogService.class)
+    LoginLogService inMemoryLoginLogService() {
+        return new InMemoryLoginLogService();
     }
 }

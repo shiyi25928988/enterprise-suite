@@ -40,6 +40,11 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
+        <!-- M6b: /actuator/prometheus for the monitoring stack (Grafana/VictoriaMetrics) -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+        </dependency>
 
         <!-- JDBC 持久化（M1.5）：未配置数据源时自动回退内存模式 -->
         <dependency>

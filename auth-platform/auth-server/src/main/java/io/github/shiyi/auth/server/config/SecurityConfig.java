@@ -106,8 +106,11 @@ public class SecurityConfig {
     SecurityFilterChain defaultSecurityFilterChain(HttpSecurity http) throws Exception {
         http.authorizeHttpRequests(authorize -> authorize
                 .requestMatchers("/login", "/error", "/assets/**").permitAll()
-                // probe endpoints: liveness/readiness must not require a session
-                .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info").permitAll()
+                // probe endpoints: liveness/readiness must not require a session;
+                // prometheus must be reachable by the scraper — restrict via network
+                // policy in production, the payload contains request-URI metrics
+                .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info",
+                        "/actuator/prometheus").permitAll()
                 .anyRequest().authenticated())
             .formLogin(Customizer.withDefaults());
         return http.build();
@@ -145,17 +148,24 @@ public class SecurityConfig {
      * Provider registry: the password provider is always present; conditional
      * M5 providers (LDAP/AD, WeCom QR) are picked up from the context when
      * their properties enable them (auth.ldap.enabled / auth.wecom.enabled).
+     *
+     * <p>The event publisher is wired explicitly so authentication events reach
+     * {@code AuthMetrics} — without it ProviderManager stays silent.</p>
      */
     @Bean
     AuthenticationManager authenticationManager(PlatformUserDetailsService userDetailsService,
                                                 PasswordEncoder passwordEncoder,
                                                 io.github.shiyi.auth.user.account.UserAccountService accounts,
                                                 io.github.shiyi.auth.server.auth.mfa.MfaChallengeService mfaChallenges,
+                                                org.springframework.security.authentication.AuthenticationEventPublisher eventPublisher,
                                                 org.springframework.beans.factory.ObjectProvider<org.springframework.security.authentication.AuthenticationProvider> extraProviders) {
         var providers = new java.util.ArrayList<org.springframework.security.authentication.AuthenticationProvider>();
         providers.add(new PlatformAuthenticationProvider(
                 userDetailsService, passwordEncoder, accounts, mfaChallenges));
         extraProviders.orderedStream().forEach(providers::add);
-        return new ProviderManager(providers);
+        // Security 7: publisher is injected via setter, not a constructor argument
+        var manager = new ProviderManager(providers);
+        manager.setAuthenticationEventPublisher(eventPublisher);
+        return manager;
     }
 }
