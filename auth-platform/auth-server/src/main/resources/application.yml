@@ -93,6 +93,12 @@ auth:
       # api-key: ${FLOW_AI_KEY}
       # model: gpt-4o-mini
       # timeout-seconds: 30
+    # W2 SLA reminders: a fixed-delay sweep publishes "task.overdue" webhooks
+    # for active tasks whose BPMN dueDate (${slaClock...}) has passed.
+    sla:
+      enabled: true
+      scan-interval-ms: 60000
+      initial-delay-ms: 20000
 
 ---
 # JDBC mode ("jdbc" profile): real MySQL persistence. The database is created

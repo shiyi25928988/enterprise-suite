@@ -37,3 +37,28 @@ export const claimTask = (id) =>
 
 export const completeTask = (id, body) =>
   http.post(`/api/v1/flow/tasks/${id}/complete`, body).then((r) => r.data.data)
+
+// ---- W2: delegation / transfer ----
+
+export const delegateTask = (id, user) =>
+  http.post(`/api/v1/flow/tasks/${id}/delegate`, { user }).then((r) => r.data.data)
+
+export const transferTask = (id, user) =>
+  http.post(`/api/v1/flow/tasks/${id}/transfer`, { user }).then((r) => r.data.data)
+
+export const unclaimTask = (id) =>
+  http.post(`/api/v1/flow/tasks/${id}/unclaim`).then((r) => r.data.data)
+
+// ---- W2: analytics ----
+
+export const analyticsOverview = () =>
+  http.get('/api/v1/flow/analytics/overview').then((r) => r.data.data)
+
+export const analyticsDefinitions = () =>
+  http.get('/api/v1/flow/analytics/definitions').then((r) => r.data.data)
+
+export const analyticsNodes = (processKey) =>
+  http.get(`/api/v1/flow/analytics/nodes/${processKey}`).then((r) => r.data.data)
+
+export const instanceTimeline = (id) =>
+  http.get(`/api/v1/flow/instances/${id}/timeline`).then((r) => r.data.data)

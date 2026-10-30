@@ -26,6 +26,7 @@ const menu = computed(() => {
       { to: '/roles', label: '角色管理' },
       { to: '/apps', label: '应用接入' },
       { to: '/flow/admin', label: '流程管理' },
+      { to: '/flow/analytics', label: '流程分析' },
       { to: '/sessions', label: '在线会话' },
       { to: '/sync', label: '目录同步' },
       { to: '/audit', label: '操作日志' },

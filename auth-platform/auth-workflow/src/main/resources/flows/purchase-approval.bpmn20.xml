@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xmlns:flowable="http://flowable.org/bpmn"
+             targetNamespace="io.github.shiyi.auth.workflow">
+
+    <!-- W2 countersign demo: parallel multi-instance approval.
+         - approvers: process variable, List of platform usernames (converted
+           from the comma-separated form field at start)
+         - one veto ends the block early (csRejected, set by the vote ledger
+           bookkeeping in WorkflowService)
+         - after the block, approved carries the majority decision (ties → pass)
+         - SLA: every task is due 48h after creation (slaClock bean) -->
+    <process id="purchase-approval" name="采购会签审批" isExecutable="true">
+
+        <startEvent id="start" name="提交申请" flowable:initiator="initiator"/>
+
+        <sequenceFlow id="flow1" sourceRef="start" targetRef="aiReview"/>
+
+        <serviceTask id="aiReview" name="AI 预审"
+                     flowable:delegateExpression="${aiReviewDelegate}"/>
+
+        <sequenceFlow id="flow2" sourceRef="aiReview" targetRef="countersign"/>
+
+        <userTask id="countersign" name="会签审批"
+                  flowable:assignee="${user}"
+                  flowable:dueDate="${slaClock.hours(48)}">
+            <multiInstanceLoopCharacteristics isSequential="false"
+                    flowable:collection="${approvers}"
+                    flowable:elementVariable="user">
+                <completionCondition>
+                    ${nrOfCompletedInstances >= nrOfInstances || csRejected == true}
+                </completionCondition>
+            </multiInstanceLoopCharacteristics>
+        </userTask>
+
+        <sequenceFlow id="flow3" sourceRef="countersign" targetRef="decision"/>
+
+        <exclusiveGateway id="decision" name="会签结果"/>
+
+        <sequenceFlow id="flowApprove" sourceRef="decision" targetRef="endApproved">
+            <conditionExpression xsi:type="tFormalExpression">
+                <![CDATA[${csRejected != true && approved != false}]]>
+            </conditionExpression>
+        </sequenceFlow>
+
+        <sequenceFlow id="flowReject" sourceRef="decision" targetRef="endRejected">
+            <conditionExpression xsi:type="tFormalExpression">
+                <![CDATA[${csRejected == true || approved == false}]]>
+            </conditionExpression>
+        </sequenceFlow>
+
+        <endEvent id="endApproved" name="已通过"/>
+        <endEvent id="endRejected" name="已驳回"/>
+    </process>
+</definitions>

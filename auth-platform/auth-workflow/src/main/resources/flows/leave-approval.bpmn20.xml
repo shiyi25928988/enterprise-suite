@@ -17,7 +17,8 @@
         <sequenceFlow id="flow2" sourceRef="aiReview" targetRef="managerApproval"/>
 
         <userTask id="managerApproval" name="主管审批"
-                  flowable:candidateGroups="ADMIN"/>
+                  flowable:candidateGroups="ADMIN"
+                  flowable:dueDate="${slaClock.hours(48)}"/>
 
         <sequenceFlow id="flow3" sourceRef="managerApproval" targetRef="decision"/>
 

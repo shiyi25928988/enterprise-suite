@@ -260,6 +260,41 @@ rejects missing required fields (40001), instance start → AI pre-review
 state `approved`/`rejected`, done list populated, `task.assigned` webhook
 delivered. Custom BPMN deployed through the API is immediately startable.
 
+### W2: workflow advanced — countersign, delegation, SLA, analytics (2026-10-30)
+
+- **Countersign (会签)**: parallel multi-instance user tasks
+  (`flowable:collection="${approvers}"`) — approvers collected as a
+  comma-separated form field, converted to a `List` at start. Vote bookkeeping
+  lives in `WorkflowService`: a process-level `countersignVotes` ledger, a
+  first-reject veto flag (`csRejected`) that ends the block early, and an
+  aggregate `approved` majority for the gateway after the MI block. Per-task
+  progress (`2/3`) and the vote ledger surface in the SPA.
+- **Delegation & transfer**: `delegate` (ownership handshake — delegatee
+  answers via `resolveTask`, delegator completes; surfaced as
+  `pending`/`resolved` with the owner in the task view), `transfer`
+  (outright reassignment), `unclaim` (back to the candidate pool).
+- **SLA reminders**: BPMN due dates via a `slaClock` expression bean
+  (`flowable:dueDate="${slaClock.hours(48)}"`); a fixed-delay scanner
+  (`auth.flow.sla.*`) publishes `task.overdue` webhooks once per task
+  (comment-marker dedup). Polling rather than boundary timers — the engine's
+  async executor is disabled in this deployment.
+- **Analytics** (`/api/v1/flow/analytics/**`, ADMIN): overview (throughput,
+  approval rate, average cycle time, overdue count), per-definition stats,
+  per-node cycle times (min/avg/max), and a per-instance activity timeline.
+  Decisions are counted only for finished instances — a running countersign's
+  `approved` variable is scratch state, not an outcome.
+- **Frontend**: 审批中心 gains delegation/transfer/unclaim actions, overdue
+  badges and countersign progress; 我的申请 gains a timeline; new 流程分析
+  admin page (stat cards, definition table, node-duration bars).
+- Ships the **采购会签审批** template (AI pre-review → parallel countersign
+  with one-veto rule → 48h SLA → approve/reject gateway) on first boot.
+
+Verified E2E: countersign all-approve (votes ledger in instance detail) and
+one-veto early exit, full delegation handshake (claim → delegate → resolve →
+complete), transfer, `task.overdue` webhook delivered with due date and
+overdue millis, analytics endpoints populated correctly, timeline shows every
+activity including both countersign instances.
+
 ### Frontend SPA (auth-web)
 
 > Access control: the admin console is restricted to users holding the
@@ -307,8 +342,9 @@ so browser traffic is same-origin — the same topology as production.
 - [x] M10 HR-CSV directory provider + webhook notification contact points
 - [x] W1 workflow module: embedded Flowable 8, approval flows bound to platform
       users/roles, dynamic forms, bpmn-js designer, AI pre-review node
-- [ ] W2: parallel/会签 nodes, delegation & transfer, SLA timers & reminders,
-      process analytics (cycle time per node)
+- [x] W2 workflow advanced: parallel countersign (one-veto rule), delegation
+      & transfer, SLA due dates + overdue webhooks, process analytics
+      (cycle time per definition and per node)
 - [ ] M5c: DingTalk QR login, badge QR, per-device token policies, anomaly detection
 - [ ] M10b: LDAP provider (same SPI), email contact points
 

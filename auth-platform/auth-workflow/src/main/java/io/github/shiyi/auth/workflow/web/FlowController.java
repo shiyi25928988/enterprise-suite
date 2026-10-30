@@ -36,6 +36,13 @@ import io.github.shiyi.auth.workflow.flow.WorkflowService;
  *   GET  /api/v1/flow/tasks/{id}                 task detail + variables + comments
  *   POST /api/v1/flow/tasks/{id}/claim
  *   POST /api/v1/flow/tasks/{id}/complete        {approved, comment}
+ *   POST /api/v1/flow/tasks/{id}/delegate        {user} — W2, ownership handshake
+ *   POST /api/v1/flow/tasks/{id}/transfer        {user} — W2, reassign outright
+ *   POST /api/v1/flow/tasks/{id}/unclaim         W2, back to the candidate pool
+ *   GET  /api/v1/flow/analytics/overview         W2 (ADMIN)
+ *   GET  /api/v1/flow/analytics/definitions      W2 (ADMIN)
+ *   GET  /api/v1/flow/analytics/nodes/{key}      W2 (ADMIN)
+ *   GET  /api/v1/flow/instances/{id}/timeline    W2, activity timeline
  * </pre>
  * Identity comes from the session/JWT — never from the request body.
  */
@@ -45,11 +52,14 @@ public class FlowController {
 
     private final ObjectProvider<WorkflowService> workflows;
     private final ObjectProvider<FlowFormService> forms;
+    private final ObjectProvider<io.github.shiyi.auth.workflow.analytics.FlowAnalyticsService> analyticsProvider;
 
     public FlowController(ObjectProvider<WorkflowService> workflows,
-                          ObjectProvider<FlowFormService> forms) {
+                          ObjectProvider<FlowFormService> forms,
+                          ObjectProvider<io.github.shiyi.auth.workflow.analytics.FlowAnalyticsService> analyticsProvider) {
         this.workflows = workflows;
         this.forms = forms;
+        this.analyticsProvider = analyticsProvider;
     }
 
     // ---------- definitions / forms (ADMIN) ----------
@@ -200,6 +210,61 @@ public class FlowController {
                 req.approved(), req.comment()));
     }
 
+    // ---------- W2: delegation / transfer ----------
+
+    /** On a pending-delegation task this answers back to the delegator. */
+    public record TaskActionRequest(String user) {
+    }
+
+    @PostMapping("/tasks/{id}/delegate")
+    public ApiResult<WorkflowService.TaskView> delegate(@PathVariable String id,
+                                                        @RequestBody TaskActionRequest req,
+                                                        Authentication auth) {
+        return ApiResult.ok(service().delegate(id, auth.getName(), roles(auth), req.user()));
+    }
+
+    @PostMapping("/tasks/{id}/transfer")
+    public ApiResult<WorkflowService.TaskView> transfer(@PathVariable String id,
+                                                        @RequestBody TaskActionRequest req,
+                                                        Authentication auth) {
+        return ApiResult.ok(service().transfer(id, auth.getName(), roles(auth), req.user()));
+    }
+
+    @PostMapping("/tasks/{id}/unclaim")
+    public ApiResult<WorkflowService.TaskView> unclaim(@PathVariable String id,
+                                                       Authentication auth) {
+        return ApiResult.ok(service().unclaim(id, auth.getName(), roles(auth)));
+    }
+
+    // ---------- W2: analytics ----------
+
+    @GetMapping("/analytics/overview")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ApiResult<io.github.shiyi.auth.workflow.analytics.FlowAnalyticsService.Overview>
+            analyticsOverview() {
+        return ApiResult.ok(analytics().overview());
+    }
+
+    @GetMapping("/analytics/definitions")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ApiResult<List<io.github.shiyi.auth.workflow.analytics.FlowAnalyticsService.DefinitionStats>>
+            analyticsDefinitions() {
+        return ApiResult.ok(analytics().definitions());
+    }
+
+    @GetMapping("/analytics/nodes/{processKey}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ApiResult<List<io.github.shiyi.auth.workflow.analytics.FlowAnalyticsService.NodeStats>>
+            analyticsNodes(@PathVariable String processKey) {
+        return ApiResult.ok(analytics().nodes(processKey));
+    }
+
+    @GetMapping("/instances/{id}/timeline")
+    public ApiResult<List<io.github.shiyi.auth.workflow.analytics.FlowAnalyticsService.TimelineStep>>
+            timeline(@PathVariable String id) {
+        return ApiResult.ok(analytics().timeline(id));
+    }
+
     // ---------- plumbing ----------
 
     private WorkflowService service() {
@@ -215,6 +280,15 @@ public class FlowController {
         FlowFormService s = forms.getIfAvailable();
         if (s == null) {
             throw new BizException(ErrorCode.BAD_REQUEST, "workflow requires the jdbc profile");
+        }
+        return s;
+    }
+
+    private io.github.shiyi.auth.workflow.analytics.FlowAnalyticsService analytics() {
+        var s = analyticsProvider.getIfAvailable();
+        if (s == null) {
+            throw new BizException(ErrorCode.BAD_REQUEST,
+                    "workflow requires the jdbc profile (embedded Flowable engine)");
         }
         return s;
     }

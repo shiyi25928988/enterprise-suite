@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
-import { listStartable, getForm, startInstance, myInstances, instanceDetail } from '../../api/flow'
+import { listStartable, getForm, startInstance, myInstances, instanceDetail,
+         instanceTimeline } from '../../api/flow'
 
 const startable = ref([])
 const instances = ref([])
@@ -13,6 +14,7 @@ const formValues = reactive({})
 const submitting = ref(false)
 const businessKey = ref('')
 const detail = ref(null)
+const timeline = ref([])
 
 const current = computed(() => startable.value.find((s) => s.processKey === selectedKey.value))
 const fields = computed(() => {
@@ -76,11 +78,23 @@ async function submit() {
 
 async function openInstance(row) {
   error.value = ''
+  timeline.value = []
   try {
     detail.value = await instanceDetail(row.id)
+    timeline.value = await instanceTimeline(row.id)
   } catch (e) {
     error.value = e.message
   }
+}
+
+const stepState = (s) =>
+  s.endTime ? (s.type === 'endEvent' ? '已结束' : '已办理') : '进行中'
+const fmtDuration = (ms) => {
+  if (ms == null) return '—'
+  if (ms < 60000) return `${Math.round(ms / 1000)} 秒`
+  if (ms < 3600000) return `${Math.round(ms / 60000)} 分钟`
+  if (ms < 86400000) return `${(ms / 3600000).toFixed(1)} 小时`
+  return `${(ms / 86400000).toFixed(1)} 天`
 }
 
 const fmtTime = (iso) => (iso ? new Date(iso).toLocaleString() : '—')
@@ -180,10 +194,31 @@ onMounted(load)
         <tbody>
           <tr v-for="(v, k) in detail.variables" :key="k">
             <th style="width: 160px;">{{ k }}</th>
-            <td>{{ v }}</td>
+            <td>{{ Array.isArray(v) ? v.join('、') : v }}</td>
           </tr>
         </tbody>
       </table>
+
+      <h5 style="margin: 16px 0 8px;">流转时间线</h5>
+      <table v-if="timeline.length">
+        <thead>
+          <tr><th>节点</th><th>类型</th><th>办理人</th><th>开始</th><th>结束</th><th>耗时</th></tr>
+        </thead>
+        <tbody>
+          <tr v-for="(s, i) in timeline" :key="i">
+            <td>{{ s.name }}</td>
+            <td class="muted">{{ s.type }}</td>
+            <td>{{ s.assignee || '—' }}</td>
+            <td>{{ fmtTime(s.startTime) }}</td>
+            <td>{{ s.endTime ? fmtTime(s.endTime) : '—' }}</td>
+            <td>
+              {{ s.endTime ? fmtDuration(s.durationMs) : '' }}
+              <span v-if="!s.endTime" class="tag running">{{ stepState(s) }}</span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <p v-else class="muted">暂无流转记录</p>
     </div>
   </div>
 </template>

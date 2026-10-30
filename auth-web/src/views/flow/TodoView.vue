@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { todoTasks, doneTasks, taskDetail, claimTask, completeTask, getForm } from '../../api/flow'
+import { todoTasks, doneTasks, taskDetail, claimTask, completeTask, getForm,
+         delegateTask, transferTask, unclaimTask } from '../../api/flow'
 
 const tab = ref('todo')
 const todo = ref([])
@@ -26,8 +27,14 @@ const aiBadge = computed(() => {
 const formRows = computed(() => {
   if (!detail.value) return []
   return Object.entries(detail.value.variables)
-    .filter(([k]) => !['starter', 'approved', 'aiSuggestion', 'aiReason'].includes(k))
+    .filter(([k]) => !['starter', 'approved', 'aiSuggestion', 'aiReason',
+      'approvers', 'approvalRatio', 'countersignVotes', 'csRejected'].includes(k))
     .map(([k, v]) => ({ key: k, label: labels.value[k] || k, value: v }))
+})
+
+const votes = computed(() => {
+  const v = detail.value?.variables?.countersignVotes
+  return Array.isArray(v) ? v : []
 })
 
 async function load() {
@@ -80,6 +87,49 @@ async function claim() {
   }
 }
 
+async function delegate() {
+  if (!detail.value) return
+  const user = window.prompt('委派给（用户名）——对方处理后需由你最终确认：')
+  if (!user) return
+  try {
+    await delegateTask(detail.value.task.id, user.trim())
+    notice.value = `已委派给 ${user.trim()}`
+    detail.value = null
+    await load()
+  } catch (e) {
+    error.value = e.message
+  }
+}
+
+async function transfer() {
+  if (!detail.value) return
+  const user = window.prompt('转办给（用户名）——任务直接移交：')
+  if (!user) return
+  try {
+    await transferTask(detail.value.task.id, user.trim())
+    notice.value = `已转办给 ${user.trim()}`
+    detail.value = null
+    await load()
+  } catch (e) {
+    error.value = e.message
+  }
+}
+
+async function unclaim() {
+  if (!detail.value) return
+  try {
+    await unclaimTask(detail.value.task.id)
+    notice.value = '已放弃认领'
+    await openWithSchema({ id: detail.value.task.id })
+  } catch (e) {
+    error.value = e.message
+  }
+}
+
+//  SLA scanner bookkeeping markers should not surface as approval comments
+const visibleComments = computed(() =>
+  (detail.value?.comments || []).filter((c) => !String(c).startsWith('sla-overdue:')))
+
 async function decide(approved) {
   if (!detail.value) return
   acting.value = true
@@ -98,6 +148,16 @@ async function decide(approved) {
 
 const fmtTime = (iso) => (iso ? new Date(iso).toLocaleString() : '—')
 const list = computed(() => (tab.value === 'todo' ? todo : done))
+
+const isOverdue = (t) => t.dueDate && new Date(t.dueDate).getTime() < Date.now()
+
+function taskTag(t) {
+  if (isOverdue(t)) return { text: '已超期', cls: 'rejected' }
+  if (t.delegationState === 'pending') return { text: '已委派，待对方处理', cls: 'running' }
+  if (t.delegationState === 'resolved') return { text: '委派已回复，待你确认', cls: 'running' }
+  if (t.progress) return { text: `会签 ${t.progress}`, cls: 'running' }
+  return { text: '待处理', cls: '' }
+}
 
 onMounted(load)
 </script>
@@ -122,7 +182,7 @@ onMounted(load)
 
     <table>
       <thead>
-        <tr><th>任务</th><th>流程实例</th><th>创建时间</th><th>办理人</th><th></th></tr>
+        <tr><th>任务</th><th>流程实例</th><th>创建时间</th><th>办理人</th><th>状态</th><th></th></tr>
       </thead>
       <tbody>
         <tr v-for="t in list" :key="t.id">
@@ -131,12 +191,15 @@ onMounted(load)
           <td>{{ fmtTime(t.createTime) }}</td>
           <td>{{ t.assignee || '未认领' }}</td>
           <td>
-            <button v-if="tab === 'todo'" class="mini" @click="openWithSchema(t)">办理</button>
+            <span v-if="tab === 'todo'" class="tag" :class="taskTag(t).cls">{{ taskTag(t).text }}</span>
             <span v-else class="muted">已完成</span>
+          </td>
+          <td>
+            <button v-if="tab === 'todo'" class="mini" @click="openWithSchema(t)">办理</button>
           </td>
         </tr>
         <tr v-if="!list.length">
-          <td colspan="5" class="muted">
+          <td colspan="6" class="muted">
             {{ tab === 'todo' ? '没有待办任务' : '还没有已办记录' }}
           </td>
         </tr>
@@ -148,6 +211,11 @@ onMounted(load)
         {{ detail.task.name }}
         <button class="mini" style="float: right;" @click="detail = null">关闭</button>
       </h4>
+      <p v-if="isOverdue(detail.task)" class="error">⚠ 该任务已超过办理期限（{{ fmtTime(detail.task.dueDate) }}）</p>
+      <p v-if="detail.task.delegationState === 'pending'" class="ai-line">
+        <span class="tag running">委派任务</span>
+        <span class="muted">由 {{ detail.task.owner || '流程发起人' }} 委派，你的结论会回复给对方确认</span>
+      </p>
       <p v-if="aiBadge" class="ai-line">
         <span class="tag" :class="aiBadge.cls">{{ aiBadge.text }}</span>
         <span class="muted">{{ detail.variables.aiReason }}</span>
@@ -157,27 +225,46 @@ onMounted(load)
         <tbody>
           <tr v-for="r in formRows" :key="r.key">
             <th style="width: 160px;">{{ r.label }}</th>
-            <td>{{ r.value }}</td>
+            <td>{{ Array.isArray(r.value) ? r.value.join('、') : r.value }}</td>
           </tr>
         </tbody>
       </table>
 
-      <div v-if="detail.comments?.length" class="comments">
+      <div v-if="detail.task.progress" class="comments">
+        <h5>会签进度（{{ detail.task.progress }}）</h5>
+        <p v-for="(v, i) in votes" :key="i" class="muted">· {{ v }}</p>
+      </div>
+
+      <div v-if="visibleComments.length" class="comments">
         <h5>审批记录</h5>
-        <p v-for="(c, i) in detail.comments" :key="i" class="muted">· {{ c }}</p>
+        <p v-for="(c, i) in visibleComments" :key="i" class="muted">· {{ c }}</p>
       </div>
 
       <label class="field">
         <span>审批意见</span>
         <textarea v-model="comment" rows="2" placeholder="可选" />
       </label>
-      <div style="display: flex; gap: 10px;">
+      <div style="display: flex; gap: 10px; flex-wrap: wrap;">
         <button v-if="!detail.task.assignee" class="mini" style="width: auto;" @click="claim">
           认领
         </button>
-        <button :disabled="acting" style="width: auto; margin: 0;" @click="decide(true)">通过</button>
+        <button v-if="detail.task.assignee && detail.task.delegationState !== 'pending'"
+                class="mini" style="width: auto;" @click="unclaim">
+          放弃认领
+        </button>
+        <button v-if="detail.task.delegationState !== 'pending'"
+                class="mini" style="width: auto;" @click="delegate">
+          委派
+        </button>
+        <button v-if="detail.task.delegationState !== 'pending'"
+                class="mini" style="width: auto;" @click="transfer">
+          转办
+        </button>
+        <button :disabled="acting" style="width: auto; margin: 0;" @click="decide(true)">
+          {{ detail.task.delegationState === 'pending' ? '回复（同意）' : '通过' }}
+        </button>
         <button :disabled="acting" class="danger" style="width: auto; margin: 0;" @click="decide(false)">
-          驳回
+          {{ detail.task.delegationState === 'pending' ? '回复（驳回）' : '驳回' }}
         </button>
       </div>
     </div>
