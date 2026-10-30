@@ -71,12 +71,26 @@ auth:
     # secret: ${WECOM_SECRET}
     # redirect-uri: ""   # defaults to {origin}/wecom-callback
   # M10 directory sync switches (per-source, all off by default):
-  #   auth.sync.wecom.* / auth.sync.dingtalk.* / auth.sync.csv.*
+  #   auth.sync.wecom.* / auth.sync.dingtalk.* / auth.sync.csv.* / auth.sync.ldap.*
   sync:
     cron: "-"
     csv:
       enabled: false
       # path: /data/hr/export.csv
+    # M10b plain LDAP / Active Directory as a directory source. External ids are
+    # the entry DNs; a user's org is its direct parent entry. Attribute names
+    # default to the AD spelling — OpenLDAP only needs login-attribute: uid
+    # plus a matching user-filter.
+    ldap:
+      enabled: false
+      # url: ldap://dc01.corp.example.com:389
+      # base-dn: DC=corp,DC=example,DC=com
+      # bind-dn: CN=svc-iam,OU=Service,DC=corp,DC=example,DC=com
+      # bind-password: ${LDAP_BIND_PASSWORD}
+      # user-filter: (&(objectClass=person)(!(objectClass=computer)))
+      # login-attribute: sAMAccountName
+      # name-attribute: cn
+      # org-name-attribute: ou
   # M5c DingTalk scan login (钉钉扫码) — same shape as the WeCom block.
   # api-base-url / oapi-base-url exist so tests can point at a stub.
   dingtalk:
@@ -92,11 +106,26 @@ auth:
     brute-threshold: 5
     brute-window-minutes: 10
   # M10 notification contact points — events (account.locked, sync.completed,
-  # sync.failed) fan out as JSON POSTs to every active webhook.
+  # sync.failed, login.anomaly, task.overdue) fan out to every active contact:
+  #   type: webhook → JSON POST to url
+  #   type: email   → plain-text mail to `to` through auth.notify.mail.*
   notify:
     contacts: []
     #  - type: webhook
     #    url: https://ops.example.com/hooks/auth-events
+    #  - type: email
+    #    to: ops@example.com,security@example.com
+    # M10b SMTP relay for email contacts. No host → the email channel stays
+    # unready, so a half-configured mail block never blocks a login.
+    mail:
+      # host: smtp.example.com
+      port: 25
+      # username: iam@example.com
+      # password: ${SMTP_PASSWORD}
+      from: no-reply@auth-platform.local
+      start-tls: false
+      ssl: false
+      timeout-ms: 5000
   # W1 workflow: AI participant node (service task ${aiReviewDelegate}).
   # Off by default — the node then marks its review "unavailable" and the
   # human approval proceeds unchanged. Any OpenAI-compatible endpoint works.

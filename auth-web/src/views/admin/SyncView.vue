@@ -85,7 +85,7 @@ onMounted(load)
         </tr>
         <tr v-if="!hasAnySource && !error">
           <td colspan="7" class="muted" style="text-align: center;">
-            尚未启用任何目录来源（在服务端配置 auth.sync.dingtalk.enabled / auth.sync.wecom.enabled）
+            尚未启用任何目录来源（在服务端配置 auth.sync.wecom.enabled / auth.sync.dingtalk.enabled / auth.sync.csv.enabled / auth.sync.ldap.enabled）
           </td>
         </tr>
       </tbody>

@@ -336,6 +336,40 @@ bound-column login, badge login plus rotation (old code rejected, new one accept
 `brute_force` fired exactly once at the fifth failure, and per-device TTLs read back
 from `oauth2_registered_client.token_settings` (`PT1H30M` / `PT25M`).
 
+### M10b: LDAP directory source + email contact points (2026-10-30)
+
+- **LDAP / AD as a directory source** (`auth.sync.ldap.*`): a fourth
+  `DirectoryProvider`, so the existing upsert in `UserSyncService` (shadow
+  accounts, org tree, warnings) and `POST /api/v1/sync/ldap` come for free.
+  JNDI over `ldap://` / `ldaps://`, optional service-account bind (anonymous
+  otherwise), subtree searches for OUs and users, and **non-critical paged
+  results** because AD caps an unpaged search at 1000 entries — a server that
+  ignores the control answers in one page and the loop ends.
+- **Mapping**: external id = the lower-cased entry **DN**, the only stable
+  unique key a tree offers; a user's org is its **direct parent entry** when
+  that parent was itself imported (users directly under the search root stay
+  orgless — no synthetic node is invented); org labels come from `ou` →
+  `description` → first RDN value; `sAMAccountName` (`uid` for OpenLDAP)
+  becomes the platform username, `employeeID` → 员工编号, `mobile` → 手机号.
+  The default user filter already excludes AD **computer accounts**, which
+  also carry `objectClass=person`. Synced users land with `sys_user.source=2`.
+- **Email contact points** (`auth.notify.contacts[].type=email`): the M10
+  webhook branch became a small `NotifyChannel` SPI (webhook + email), so
+  `NotificationService.publish` is unchanged for callers and every event —
+  `account.locked`, `sync.completed` / `sync.failed`, `login.anomaly`,
+  `task.overdue` — now reaches a mailbox as well. Plain text, one
+  `field: value` line per entry; the relay is configured once under
+  `auth.notify.mail.*` (starttls / implicit TLS / optional AUTH, bounded by
+  `timeout-ms`). With no host the channel reports itself unready and is
+  skipped, so a half-configured mail block never fails a login.
+
+Verified E2E against a stub LDAPv3 server and a stub SMTP relay: 2 OUs +
+2 users imported (nested OU keeps its parent, `ldap:`-prefixed org codes, user
+attributes and org binding correct in the DB, computer account filtered out),
+second run fully idempotent (all-zero delta), and both `sync.completed` and
+`login.anomaly` delivered to webhook **and** mailbox (`[auth-platform]
+sync.completed` to `ops@example.com`).
+
 ### Frontend SPA (auth-web)
 
 > Access control: the admin console is restricted to users holding the
@@ -388,7 +422,8 @@ so browser traffic is same-origin — the same topology as production.
       (cycle time per definition and per node)
 - [x] M5c: DingTalk QR login, badge QR, per-device token policies, anomaly detection
       (new-location + brute-force rules → `login.anomaly` webhooks)
-- [ ] M10b: LDAP provider (same SPI), email contact points
+- [x] M10b: LDAP directory provider (same SPI, DN-keyed org/user import) +
+      email notification contact points (webhook/email channel SPI)
 
 See the [development doc](docs/) (Chinese) for the full specification.
 

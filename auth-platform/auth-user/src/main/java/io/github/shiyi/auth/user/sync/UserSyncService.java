@@ -222,6 +222,7 @@ public class UserSyncService {
             case "wecom" -> 3;
             case "dingtalk" -> 4;
             case "csv" -> 5;
+            case "ldap" -> 2;
             default -> 4;
         };
 

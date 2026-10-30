@@ -1,27 +1,21 @@
 package io.github.shiyi.auth.user.notify;
 
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import tools.jackson.databind.ObjectMapper;
-
 /**
- * M10: publishes platform events to configured contact points. Currently
- * webhook only (JSON POST) — Grafana already covers email/chat channels via
- * its own contact points, so this is for in-app business events that a
- * downstream system wants to react to (auto-lock, sync outcome, …).
+ * M10: publishes platform events to configured contact points. M10b splits the
+ * transports into {@link NotifyChannel}s (webhook, email) while keeping this
+ * entry point unchanged — callers still just call {@code publish(event, map)}.
  *
- * <p>Delivery is synchronous but bounded (3 s connect / 3 s request) and
- * every failure path is swallowed with a warn log: a dead webhook must not
+ * <p>Delivery is synchronous so the event ordering is the business ordering,
+ * but every transport call is bounded by its own timeouts and every failure is
+ * swallowed with a warn log: a dead webhook or an unreachable relay must never
  * fail a login or a sync run.</p>
  */
 public class NotificationService {
@@ -29,30 +23,27 @@ public class NotificationService {
     private static final Logger log = LoggerFactory.getLogger(NotificationService.class);
 
     private final NotifyProperties props;
-    private final ObjectMapper mapper = new ObjectMapper();
-    private final HttpClient http = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(3))
-            .build();
+    private final List<NotifyChannel> channels;
 
-    public NotificationService(NotifyProperties props) {
+    public NotificationService(NotifyProperties props, List<NotifyChannel> channels) {
         this.props = props;
+        this.channels = List.copyOf(channels);
     }
 
-    /** @return true when at least one active webhook is configured */
+    /** @return true when at least one contact has a ready channel behind it */
     public boolean hasContacts() {
-        return props.getContacts().stream().anyMatch(c -> !c.isDisabled()
-                && "webhook".equalsIgnoreCase(c.getType())
-                && c.getUrl() != null && !c.getUrl().isBlank());
+        return props.getContacts().stream()
+                .anyMatch(c -> !c.isDisabled() && channelFor(c) != null);
     }
 
     /**
-     * Fan out one event to every active webhook contact.
+     * Fan out one event to every active contact whose channel can send.
      *
      * @param event   short machine name, e.g. "account.locked", "sync.completed"
      * @param payload event specifics; a "source" identifier goes in first
      */
     public void publish(String event, Map<String, Object> payload) {
-        if (!hasContacts()) {
+        if (channels.isEmpty() || props.getContacts().isEmpty()) {
             return;
         }
         Map<String, Object> body = new LinkedHashMap<>();
@@ -61,28 +52,39 @@ public class NotificationService {
         if (payload != null) {
             body.putAll(payload);
         }
-        String json = mapper.writeValueAsString(body);
         for (NotifyProperties.Contact c : props.getContacts()) {
-            if (c.isDisabled() || !"webhook".equalsIgnoreCase(c.getType())
-                    || c.getUrl() == null || c.getUrl().isBlank()) {
+            if (c.isDisabled()) {
+                continue;
+            }
+            NotifyChannel channel = channelFor(c);
+            if (channel == null) {
+                log.debug("notify contact type '{}' has no ready channel, skipped", c.getType());
                 continue;
             }
             try {
-                HttpResponse<String> resp = http.send(HttpRequest.newBuilder()
-                                .uri(URI.create(c.getUrl()))
-                                .timeout(Duration.ofSeconds(3))
-                                .header("Content-Type", "application/json")
-                                .POST(HttpRequest.BodyPublishers.ofString(json))
-                                .build(),
-                        HttpResponse.BodyHandlers.ofString());
-                if (resp.statusCode() >= 300) {
-                    log.warn("notify webhook {} returned HTTP {} for event {}",
-                            c.getUrl(), resp.statusCode(), event);
-                }
+                channel.deliver(c, event, body);
             } catch (Exception e) {
-                log.warn("notify webhook {} failed for event {}: {}",
-                        c.getUrl(), event, e.toString());
+                log.warn("notify {} contact {} failed for event {}: {}",
+                        channel.type(), describe(c), event, e.toString());
             }
         }
+    }
+
+    /** Matching channel, or null when the type is unknown or the contact is incomplete. */
+    private NotifyChannel channelFor(NotifyProperties.Contact contact) {
+        String type = contact.getType();
+        if (type == null || type.isBlank()) {
+            return null;
+        }
+        for (NotifyChannel channel : channels) {
+            if (channel.type().equalsIgnoreCase(type) && channel.ready(contact)) {
+                return channel;
+            }
+        }
+        return null;
+    }
+
+    private static String describe(NotifyProperties.Contact c) {
+        return "webhook".equalsIgnoreCase(c.getType()) ? c.getUrl() : c.getTo();
     }
 }

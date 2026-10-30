@@ -42,6 +42,12 @@ public class SyncConfig {
     }
 
     @Bean
+    @ConditionalOnProperty(name = "auth.sync.ldap.enabled", havingValue = "true")
+    LdapDirectory ldapDirectory(SyncProperties props) {
+        return new LdapDirectory(props.getLdap());
+    }
+
+    @Bean
     @ConditionalOnProperty(name = "spring.datasource.url")
     UserSyncService userSyncService(SysOrgMapper orgMapper, SysUserMapper userMapper,
                                     ObjectProvider<DirectoryProvider> providers,
