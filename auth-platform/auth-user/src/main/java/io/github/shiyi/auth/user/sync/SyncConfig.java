@@ -11,6 +11,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 
 import io.github.shiyi.auth.user.mapper.SysOrgMapper;
 import io.github.shiyi.auth.user.mapper.SysUserMapper;
+import io.github.shiyi.auth.user.notify.NotificationService;
 
 /**
  * Directory-sync wiring. Every piece is conditional: with no
@@ -35,10 +36,17 @@ public class SyncConfig {
     }
 
     @Bean
+    @ConditionalOnProperty(name = "auth.sync.csv.enabled", havingValue = "true")
+    CsvDirectory csvDirectory(SyncProperties props) {
+        return new CsvDirectory(props.getCsv());
+    }
+
+    @Bean
     @ConditionalOnProperty(name = "spring.datasource.url")
     UserSyncService userSyncService(SysOrgMapper orgMapper, SysUserMapper userMapper,
-                                    ObjectProvider<DirectoryProvider> providers) {
-        return new UserSyncService(orgMapper, userMapper, providers.orderedStream().toList());
+                                    ObjectProvider<DirectoryProvider> providers,
+                                    ObjectProvider<NotificationService> notifications) {
+        return new UserSyncService(orgMapper, userMapper, providers.orderedStream().toList(), notifications);
     }
 
     /** Scheduled full sync across every enabled source; auth.sync.cron="-" disables. */

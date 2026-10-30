@@ -174,6 +174,49 @@ idempotent, username conflicts skipped.
 
 
 
+### Application access control + user center hardening (2026-10-29)
+
+- **App registry & OIDC gate**: `sys_app` + `sys_app_role` (Flyway V6) — register
+  client applications with an access policy (`ALL` / `ROLES`) and allowed role
+  list. `AppAccessFilter` enforces it on `/oauth2/authorize` and (via the
+  pending device authorization record) `/oauth2/device_verification`; denied
+  users land on `/403?reason=…&app=…`. Admin console gains 应用管理 and
+  我的应用 portal pages.
+- **User center**: user detail API (`/users/{id}/detail` — roles, org path,
+  login stats), org move (`PATCH /users/{id}/org`), role usage report +
+  triple-guarded role deletion (deny while assigned / has users / in use by
+  an app), operation audit log (`sys_operation_log`, V8) with its own admin
+  query page (审计日志), SPA 404 fallback (navigable GETs forward to the SPA,
+  `/api/**` get structured `40400`).
+- **Device flow (OAuth 2.1)**: SAS 7.1.2 ships two gaps for PUBLIC device
+  clients — no converter authenticates them on `/oauth2/device_authorization`
+  and `PublicClientAuthenticationProvider` unconditionally runs the PKCE check,
+  rejecting every `device_code` grant. Custom converter + provider (same
+  client_id/public-client validation, no PKCE) close both; E2E verified
+  end-to-end: device code → consent page → approval → token polling.
+  Note: SAS rejects `openid` scope on device grants by design — device
+  clients use business scopes (e.g. `profile`).
+- **Password max-age**: `auth.password.max-age-days` (default 90) — expired
+  passwords are flagged at login and funneled into the forced-change flow
+  (`40103` on protected APIs) until changed.
+- **Frontend**: `OrgTreeSelect` cascade component (list filter / edit form /
+  detail org-move), replacing a flat select that only rendered tree roots.
+
+### M10: CSV directory sync + webhook notifications (2026-10-30)
+
+- **HR CSV source** (`auth.sync.csv.*`): a new `DirectoryProvider` turning a
+  plain HR export into a directory — `type` column distinguishes org/user rows
+  (`org: external_id,name,parent_external_id,sort_no` ·
+  `user: external_id,name,mobile,employee_no,org_external_id`), RFC 4180
+  quoting, UTF-8 default. The file is re-read on every sync run: drop a fresh
+  export, hit `POST /api/v1/sync/csv`. Verified E2E: 3 orgs + 2 users imported
+  with correct org binding, second run idempotent (all-zero delta).
+- **Notification contact points** (`auth.notify.contacts`): webhook contacts
+  receiving JSON POSTs for platform events — `account.locked` (auto-lock
+  after failed logins), `sync.completed` / `sync.failed`. Delivery is
+  bounded (3 s) and failures are swallowed: a dead webhook never breaks a
+  login or a sync. Verified with a local stub receiver.
+
 ### Frontend SPA (auth-web)
 
 > Access control: the admin console is restricted to users holding the
@@ -216,8 +259,11 @@ so browser traffic is same-origin — the same topology as production.
 - [x] M8 directory sync: WeCom + DingTalk org/user import via a config-activated
       provider SPI; admin trigger API; verified E2E against stub APIs
 - [x] M9 sync console page (auth-web 目录同步) + provisioned Grafana alert rules
+- [x] App access control (sys_app policies), operation audit, user center hardening
+- [x] Device flow hardening (SAS 7.1.2 public-client gaps), password max-age policy
+- [x] M10 HR-CSV directory provider + webhook notification contact points
 - [ ] M5c: DingTalk QR login, badge QR, per-device token policies, anomaly detection
-- [ ] M10: LDAP/HR-CSV providers (same SPI), notification contact points
+- [ ] M10b: LDAP provider (same SPI), email contact points
 
 See the [development doc](docs/) (Chinese) for the full specification.
 

@@ -15,11 +15,13 @@ public class SyncProperties {
 
     private final Dingtalk dingtalk = new Dingtalk();
     private final Wecom wecom = new Wecom();
+    private final Csv csv = new Csv();
 
     public String getCron() { return cron; }
     public void setCron(String cron) { this.cron = cron; }
     public Dingtalk getDingtalk() { return dingtalk; }
     public Wecom getWecom() { return wecom; }
+    public Csv getCsv() { return csv; }
 
     public static class Dingtalk {
         private boolean enabled;
@@ -63,5 +65,20 @@ public class SyncProperties {
         public void setCorpSecret(String corpSecret) { this.corpSecret = corpSecret; }
         public String getBaseUrl() { return baseUrl; }
         public void setBaseUrl(String baseUrl) { this.baseUrl = baseUrl; }
+    }
+
+    /** auth.sync.csv.* — file-based HR export, see {@link CsvDirectory}. */
+    public static class Csv {
+        private boolean enabled;
+        /** Absolute path of the CSV export; re-read on every sync run. */
+        private String path;
+        private String charset = "UTF-8";
+
+        public boolean isEnabled() { return enabled; }
+        public void setEnabled(boolean enabled) { this.enabled = enabled; }
+        public String getPath() { return path; }
+        public void setPath(String path) { this.path = path; }
+        public String getCharset() { return charset; }
+        public void setCharset(String charset) { this.charset = charset; }
     }
 }

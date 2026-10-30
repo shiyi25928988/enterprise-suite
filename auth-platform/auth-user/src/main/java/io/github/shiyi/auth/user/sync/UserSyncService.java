@@ -12,6 +12,7 @@ import java.util.UUID;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -20,6 +21,7 @@ import io.github.shiyi.auth.user.entity.SysOrg;
 import io.github.shiyi.auth.user.entity.SysUser;
 import io.github.shiyi.auth.user.mapper.SysOrgMapper;
 import io.github.shiyi.auth.user.mapper.SysUserMapper;
+import io.github.shiyi.auth.user.notify.NotificationService;
 import io.github.shiyi.auth.user.service.JdbcOrgService;
 
 /**
@@ -50,15 +52,18 @@ public class UserSyncService {
     private final SysOrgMapper orgMapper;
     private final SysUserMapper userMapper;
     private final Map<String, DirectoryProvider> providers;
+    private final ObjectProvider<NotificationService> notifications;
     private final Map<String, SyncResult> lastRuns = new HashMap<>();
     private final BCryptPasswordEncoder bcrypt = new BCryptPasswordEncoder();
 
     public UserSyncService(SysOrgMapper orgMapper, SysUserMapper userMapper,
-                           List<DirectoryProvider> providers) {
+                           List<DirectoryProvider> providers,
+                           ObjectProvider<NotificationService> notifications) {
         this.orgMapper = orgMapper;
         this.userMapper = userMapper;
         this.providers = providers.stream()
                 .collect(java.util.stream.Collectors.toUnmodifiableMap(DirectoryProvider::source, p -> p));
+        this.notifications = notifications;
     }
 
     /** @return all registered (enabled) sources, e.g. ["dingtalk","wecom"] */
@@ -85,6 +90,8 @@ public class UserSyncService {
             SyncResult failed = new SyncResult(source, 0, 0, 0, 0,
                     List.of("fetch failed: " + e), Instant.now());
             lastRuns.put(source, failed);
+            notifications.ifAvailable(n -> n.publish("sync.failed", Map.of(
+                    "source", source, "error", String.valueOf(e.getMessage()))));
             return failed;
         }
 
@@ -99,6 +106,13 @@ public class UserSyncService {
         lastRuns.put(source, result);
         log.info("directory sync {}: orgs +{}/~{}, users +{}/~{}, {} warning(s)",
                 source, orgCounts.created(), orgCounts.updated(), userCounts[0], userCounts[1], warnings.size());
+        notifications.ifAvailable(n -> n.publish("sync.completed", Map.of(
+                "source", source,
+                "orgsCreated", orgCounts.created(),
+                "orgsUpdated", orgCounts.updated(),
+                "usersCreated", userCounts[0],
+                "usersUpdated", userCounts[1],
+                "warnings", warnings.size())));
         return result;
     }
 
@@ -203,7 +217,13 @@ public class UserSyncService {
                               Map<String, SysOrg> orgByExt, List<String> warnings) {
         int created = 0;
         int updated = 0;
-        int userSource = "wecom".equals(source) ? 3 : 4;
+        // sys_user.source: 1 local 2 LDAP 3 WeCom 4 DingTalk 5 CSV
+        int userSource = switch (source) {
+            case "wecom" -> 3;
+            case "dingtalk" -> 4;
+            case "csv" -> 5;
+            default -> 4;
+        };
 
         Map<String, SysUser> existingByExt = new HashMap<>();
         userMapper.selectList(new LambdaQueryWrapper<SysUser>()

@@ -46,7 +46,7 @@ public class SysUser {
     /** User id inside the external directory (unique per source) */
     private String externalId;
 
-    /** 1 local 2 LDAP 3 WeCom 4 DingTalk */
+    /** 1 local 2 LDAP 3 WeCom 4 DingTalk 5 CSV */
     private Integer source;
 
     /** 1 enabled 0 disabled 2 locked */

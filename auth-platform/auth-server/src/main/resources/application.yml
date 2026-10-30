@@ -70,6 +70,19 @@ auth:
     # agent-id: "1000002"
     # secret: ${WECOM_SECRET}
     # redirect-uri: ""   # defaults to {origin}/wecom-callback
+  # M10 directory sync switches (per-source, all off by default):
+  #   auth.sync.wecom.* / auth.sync.dingtalk.* / auth.sync.csv.*
+  sync:
+    cron: "-"
+    csv:
+      enabled: false
+      # path: /data/hr/export.csv
+  # M10 notification contact points — events (account.locked, sync.completed,
+  # sync.failed) fan out as JSON POSTs to every active webhook.
+  notify:
+    contacts: []
+    #  - type: webhook
+    #    url: https://ops.example.com/hooks/auth-events
 
 ---
 # JDBC mode ("jdbc" profile): real MySQL persistence. The database is created

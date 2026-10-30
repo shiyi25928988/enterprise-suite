@@ -2,7 +2,10 @@ package io.github.shiyi.auth.user.account;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+
+import org.springframework.beans.factory.ObjectProvider;
 
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 
@@ -10,6 +13,7 @@ import io.github.shiyi.auth.user.entity.SysLoginLog;
 import io.github.shiyi.auth.user.entity.SysUser;
 import io.github.shiyi.auth.user.mapper.SysLoginLogMapper;
 import io.github.shiyi.auth.user.mapper.SysUserMapper;
+import io.github.shiyi.auth.user.notify.NotificationService;
 
 /**
  * JDBC implementation: audit rows, fail counter, auto-lock after 5 failures.
@@ -22,19 +26,27 @@ public class JdbcUserAccountService implements UserAccountService {
     private final SysLoginLogMapper loginLogMapper;
     /** Maximum password age in days; 0 disables the policy. */
     private final int maxAgeDays;
+    /** Optional — auto-lock events fan out here when contact points exist. */
+    private final ObjectProvider<NotificationService> notifications;
     private final org.springframework.security.crypto.password.PasswordEncoder encoder =
             org.springframework.security.crypto.factory.PasswordEncoderFactories
                     .createDelegatingPasswordEncoder();
 
     public JdbcUserAccountService(SysUserMapper userMapper, SysLoginLogMapper loginLogMapper) {
-        this(userMapper, loginLogMapper, 0);
+        this(userMapper, loginLogMapper, 0, null);
     }
 
     public JdbcUserAccountService(SysUserMapper userMapper, SysLoginLogMapper loginLogMapper,
                                   int maxAgeDays) {
+        this(userMapper, loginLogMapper, maxAgeDays, null);
+    }
+
+    public JdbcUserAccountService(SysUserMapper userMapper, SysLoginLogMapper loginLogMapper,
+                                  int maxAgeDays, ObjectProvider<NotificationService> notifications) {
         this.userMapper = userMapper;
         this.loginLogMapper = loginLogMapper;
         this.maxAgeDays = maxAgeDays;
+        this.notifications = notifications;
     }
 
     @Override
@@ -169,6 +181,11 @@ public class JdbcUserAccountService implements UserAccountService {
                     .eq(SysUser::getUsername, username)
                     .set(SysUser::getStatus, 2));
             locked = true;
+            notifications.ifAvailable(n -> n.publish("account.locked", Map.of(
+                    "username", username,
+                    "failCount", user.getFailCount(),
+                    "loginType", loginType == null ? "password" : loginType,
+                    "ip", ip == null ? "" : ip)));
         }
         record(loginType, username, userId, false, failReason, ip, userAgent);
         return locked;
