@@ -20,6 +20,7 @@
     <modules>
         <module>auth-common</module>
         <module>auth-user</module>
+        <module>auth-workflow</module>
         <module>auth-server</module>
     </modules>
 
@@ -29,6 +30,8 @@
         <mapstruct.version>1.6.3</mapstruct.version>
         <springdoc.version>3.2.0</springdoc.version>
         <poi.version>5.3.0</poi.version>
+        <!-- Flowable 8: Spring Framework 7 / Boot 4 / Jackson 3 baseline — matches this project -->
+        <flowable.version>8.0.0</flowable.version>
 
         <!-- 内部模块版本统一引用 -->
         <auth-common.version>${project.version}</auth-common.version>
@@ -49,6 +52,12 @@
                 <groupId>io.github.shiyi</groupId>
                 <artifactId>auth-user</artifactId>
                 <version>${auth-user.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.flowable</groupId>
+                <artifactId>flowable-spring</artifactId>
+                <version>${flowable.version}</version>
             </dependency>
 
             <!-- MyBatis-Plus（BOM 方式；Boot 4 官方 starter 已发布，已验证存在） -->

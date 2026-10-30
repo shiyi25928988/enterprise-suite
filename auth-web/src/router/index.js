@@ -16,6 +16,9 @@ const routes = [
     meta: { requiresAuth: true },
     children: [
       { path: 'portal', name: 'portal', component: () => import('../views/PortalView.vue') },
+      { path: 'flow/requests', name: 'flow-requests', component: () => import('../views/flow/RequestsView.vue') },
+      { path: 'flow/todo', name: 'flow-todo', component: () => import('../views/flow/TodoView.vue') },
+      { path: 'flow/admin', name: 'flow-admin', component: () => import('../views/flow/FlowAdminView.vue'), meta: { requiresAdmin: true } },
       { path: 'users', name: 'users', component: () => import('../views/admin/UsersView.vue'), meta: { requiresAdmin: true } },
       { path: 'orgs', name: 'orgs', component: () => import('../views/admin/OrgView.vue'), meta: { requiresAdmin: true } },
       { path: 'roles', name: 'roles', component: () => import('../views/admin/RolesView.vue'), meta: { requiresAdmin: true } },

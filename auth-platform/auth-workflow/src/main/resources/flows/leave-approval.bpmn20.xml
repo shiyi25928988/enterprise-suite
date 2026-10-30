@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xmlns:flowable="http://flowable.org/bpmn"
+             targetNamespace="io.github.shiyi.auth.workflow">
+
+    <process id="leave-approval" name="请假审批" isExecutable="true">
+
+        <startEvent id="start" name="提交申请" flowable:initiator="initiator"/>
+
+        <sequenceFlow id="flow1" sourceRef="start" targetRef="aiReview"/>
+
+        <!-- W1-4: AI participant — writes aiSuggestion / aiReason -->
+        <serviceTask id="aiReview" name="AI 预审"
+                     flowable:delegateExpression="${aiReviewDelegate}"/>
+
+        <sequenceFlow id="flow2" sourceRef="aiReview" targetRef="managerApproval"/>
+
+        <userTask id="managerApproval" name="主管审批"
+                  flowable:candidateGroups="ADMIN"/>
+
+        <sequenceFlow id="flow3" sourceRef="managerApproval" targetRef="decision"/>
+
+        <exclusiveGateway id="decision" name="审批结果"/>
+
+        <sequenceFlow id="flowApprove" sourceRef="decision" targetRef="endApproved">
+            <conditionExpression xsi:type="tFormalExpression">
+                <![CDATA[${approved == true}]]>
+            </conditionExpression>
+        </sequenceFlow>
+
+        <sequenceFlow id="flowReject" sourceRef="decision" targetRef="endRejected">
+            <conditionExpression xsi:type="tFormalExpression">
+                <![CDATA[${approved == false}]]>
+            </conditionExpression>
+        </sequenceFlow>
+
+        <endEvent id="endApproved" name="已通过"/>
+        <endEvent id="endRejected" name="已驳回"/>
+    </process>
+</definitions>

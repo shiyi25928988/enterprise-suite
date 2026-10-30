@@ -22,6 +22,13 @@
             <artifactId>auth-user</artifactId>
         </dependency>
 
+        <!-- W1: 工作流模块（内嵌 Flowable 8 引擎，复用平台用户/角色与通知） -->
+        <dependency>
+            <groupId>io.github.shiyi</groupId>
+            <artifactId>auth-workflow</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
         <!-- SAS 7：Boot 4 官方 starter（内含 Spring Security 7 + Authorization Server） -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

@@ -83,6 +83,16 @@ auth:
     contacts: []
     #  - type: webhook
     #    url: https://ops.example.com/hooks/auth-events
+  # W1 workflow: AI participant node (service task ${aiReviewDelegate}).
+  # Off by default — the node then marks its review "unavailable" and the
+  # human approval proceeds unchanged. Any OpenAI-compatible endpoint works.
+  flow:
+    ai:
+      enabled: false
+      # base-url: https://api.example.com/v1
+      # api-key: ${FLOW_AI_KEY}
+      # model: gpt-4o-mini
+      # timeout-seconds: 30
 
 ---
 # JDBC mode ("jdbc" profile): real MySQL persistence. The database is created

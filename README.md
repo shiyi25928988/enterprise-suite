@@ -21,14 +21,15 @@ enterprise-suite/
 ├── auth-platform/
 │   ├── auth-common/    shared types: ApiResult, ErrorCode, base exceptions
 │   ├── auth-user/      user domain: DTO / service / REST API (SAS-agnostic)
-│   └── auth-server/    executable: SAS 7 wiring + user service assembly
+│   ├── auth-workflow/  workflow: embedded Flowable 8, approval API, AI node
+│   └── auth-server/    executable: SAS 7 wiring + user + workflow assembly
 ├── auth-web/           admin console SPA (Vue 3 + Vite)
 ├── bench/              single-file JDK 21 load tools (java bench/X.java)
 └── deploy/             docker-compose: Prometheus + Grafana, pre-provisioned
                         datasource and auth-platform dashboard
 ```
 
-Dependency direction is enforced at compile time: `auth-server → auth-user → auth-common`, never backwards.
+Dependency direction is enforced at compile time: `auth-server → auth-workflow → auth-user → auth-common`, never backwards.
 
 ## Quick start
 
@@ -217,6 +218,48 @@ idempotent, username conflicts skipped.
   bounded (3 s) and failures are swallowed: a dead webhook never breaks a
   login or a sync. Verified with a local stub receiver.
 
+### W1: workflow module — approval flows (2026-10-30)
+
+New Maven module **`auth-platform/auth-workflow`** deployed inside auth-server
+(one service, one database). Embedded **Flowable 8.0** — its baseline is
+Spring Framework 7 / Boot 4 / Jackson 3, i.e. exactly this project's stack
+(Flowable 7.x tops out at Boot 3), wired programmatically against the
+platform's own DataSource/transaction manager and creating its `ACT_` tables
+on first boot.
+
+- **Identity stays in the platform**: assignees are platform usernames,
+  candidate groups are role codes straight from the BPMN
+  (`flowable:candidateGroups="ADMIN"`) — nothing is mirrored into Flowable's
+  own IDM tables. Task visibility = assignee OR one of the caller's roles;
+  deciding a candidate task auto-claims it so "my done" stays meaningful.
+- **Core API** (`/api/v1/flow/**`): deploy BPMN (ADMIN), definitions, start,
+  todo / done / my-instances, task detail (variables + comments), claim,
+  complete `{approved, comment}`. Start submissions are validated against the
+  process's form schema — required fields and types (`string/number/boolean/
+  date/enum/text`) are enforced server-side, not just in the SPA.
+- **Business forms** (`sys_flow_form`, Flyway V9): JSON schema per process
+  key, edited next to the designer, rendered dynamically at start time.
+- **AI participant node**: service task
+  `flowable:delegateExpression="${aiReviewDelegate}"` sits between start and
+  the human approval. It sends the form payload to any OpenAI-compatible
+  endpoint (`auth.flow.ai.*`, off by default), parses a structured
+  `{suggestion, reason}` and stores `aiSuggestion` / `aiReason` as process
+  variables — shown in the approver's task view. Every failure degrades to
+  "unavailable"; a dead LLM never wedges an instance.
+- **Notifications**: `TASK_CREATED` engine events publish `task.assigned`
+  (task id/name, instance, candidate groups) through the M10 contact points.
+- **Frontend**: 我的申请 (dynamic form + my instances), 审批中心 (todo/done,
+  AI badge, comments), 流程管理 (bpmn-js designer with XML import/export,
+  node name + candidate-roles editing, form schema editor).
+- Ships the **请假审批** template (AI pre-review → manager approval →
+  approve/reject gateway) on first boot.
+
+Verified E2E against MySQL 8.4 + Redis: template auto-deploy, form validation
+rejects missing required fields (40001), instance start → AI pre-review
+(approve and reject branches via a stub LLM) → task completion → instance end
+state `approved`/`rejected`, done list populated, `task.assigned` webhook
+delivered. Custom BPMN deployed through the API is immediately startable.
+
 ### Frontend SPA (auth-web)
 
 > Access control: the admin console is restricted to users holding the
@@ -262,6 +305,10 @@ so browser traffic is same-origin — the same topology as production.
 - [x] App access control (sys_app policies), operation audit, user center hardening
 - [x] Device flow hardening (SAS 7.1.2 public-client gaps), password max-age policy
 - [x] M10 HR-CSV directory provider + webhook notification contact points
+- [x] W1 workflow module: embedded Flowable 8, approval flows bound to platform
+      users/roles, dynamic forms, bpmn-js designer, AI pre-review node
+- [ ] W2: parallel/会签 nodes, delegation & transfer, SLA timers & reminders,
+      process analytics (cycle time per node)
 - [ ] M5c: DingTalk QR login, badge QR, per-device token policies, anomaly detection
 - [ ] M10b: LDAP provider (same SPI), email contact points
 

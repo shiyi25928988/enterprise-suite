@@ -14,13 +14,18 @@ const roles = computed(() =>
 // Console entries are admin-only; the portal stays visible for everyone so a
 // non-admin still has a landing page after login.
 const menu = computed(() => {
-  const items = [{ to: '/portal', label: '我的应用' }]
+  const items = [
+    { to: '/portal', label: '我的应用' },
+    { to: '/flow/requests', label: '我的申请' },
+    { to: '/flow/todo', label: '审批中心' },
+  ]
   if (auth.isAdmin) {
     items.push(
       { to: '/users', label: '用户管理' },
       { to: '/orgs', label: '组织管理' },
       { to: '/roles', label: '角色管理' },
       { to: '/apps', label: '应用接入' },
+      { to: '/flow/admin', label: '流程管理' },
       { to: '/sessions', label: '在线会话' },
       { to: '/sync', label: '目录同步' },
       { to: '/audit', label: '操作日志' },
