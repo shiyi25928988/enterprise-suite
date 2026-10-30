@@ -30,7 +30,7 @@ import io.github.shiyi.auth.server.auth.SpaCsrfTokenRequestHandler;
  *   <caption>authorization table</caption>
  *   <tr><th>Endpoint</th><th>Who</th></tr>
  *   <tr><td>POST /deploy</td><td>ADMIN</td></tr>
- *   <tr><td>GET /definitions</td><td>ADMIN</td></tr>
+ *   <tr><td>GET /definitions, GET /definitions/{key}/xml</td><td>ADMIN</td></tr>
  *   <tr><td>GET /forms</td><td>ADMIN</td></tr>
  *   <tr><td>PUT /forms/{processKey}</td><td>ADMIN</td></tr>
  *   <tr><td>GET /analytics/**</td><td>ADMIN</td></tr>
@@ -66,6 +66,7 @@ public class WorkflowApiSecurityConfig {
                     // ---- ADMIN only: design-time and cross-tenant reporting ----
                     .requestMatchers(HttpMethod.POST, FLOW_BASE + "/deploy").hasRole("ADMIN")
                     .requestMatchers(HttpMethod.GET, FLOW_BASE + "/definitions").hasRole("ADMIN")
+                    .requestMatchers(HttpMethod.GET, FLOW_BASE + "/definitions/**").hasRole("ADMIN")
                     .requestMatchers(HttpMethod.GET, FLOW_BASE + "/forms").hasRole("ADMIN")
                     .requestMatchers(HttpMethod.PUT, FLOW_BASE + "/forms/*").hasRole("ADMIN")
                     .requestMatchers(FLOW_BASE + "/analytics/**").hasRole("ADMIN")

@@ -128,6 +128,10 @@ class WorkflowApiSecurityTest {
 
         mvc.perform(get("/api/v1/flow/definitions").with(employee()))
                 .andExpect(status().isForbidden());
+        // the XML is the routing logic itself (who approves what) — same gate
+        mvc.perform(get("/api/v1/flow/definitions/leave-approval/xml").with(employee()))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value(40300));
         mvc.perform(get("/api/v1/flow/analytics/overview").with(employee()))
                 .andExpect(status().isForbidden());
         mvc.perform(put("/api/v1/flow/forms/leave-approval").with(employee()).with(csrf())
@@ -140,6 +144,8 @@ class WorkflowApiSecurityTest {
     @DisplayName("an admin passes the gate and reaches the controller")
     void adminReachesDesignTimeEndpoints() throws Exception {
         mvc.perform(get("/api/v1/flow/definitions").with(admin()))
+                .andExpect(status().is(REACHED_CONTROLLER));
+        mvc.perform(get("/api/v1/flow/definitions/leave-approval/xml").with(admin()))
                 .andExpect(status().is(REACHED_CONTROLLER));
         mvc.perform(get("/api/v1/flow/forms").with(admin()))
                 .andExpect(status().is(REACHED_CONTROLLER));

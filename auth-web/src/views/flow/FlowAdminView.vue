@@ -3,7 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import BpmnModeler from 'bpmn-js/lib/Modeler'
 import 'bpmn-js/dist/assets/diagram-js.css'
 import 'bpmn-js/dist/assets/bpmn-font/css/bpmn.css'
-import { listDefinitions, deployProcess, listForms, saveForm } from '../../api/flow'
+import { listDefinitions, deployProcess, listForms, saveForm, definitionXml } from '../../api/flow'
 
 /**
  * Starter diagram. The BPMNDiagram/BPMNPlane block is not optional: bpmn-js
@@ -204,6 +204,46 @@ async function deploy() {
 function newDiagram() {
   xmlText.value = STARTER_XML
   importXml()
+}
+
+/**
+ * "Open the deployed process": pulls the BPMN source the engine actually
+ * deployed (not a re-serialised model) into the canvas, renames the deployment
+ * target to the same key so "deploy" publishes a new version instead of
+ * forking a second process.
+ *
+ * bpmn-js resets the command stack on import, so canUndo() is a reliable
+ * "there are edits that are not deployed yet" flag — the only case where
+ * replacing the canvas silently would lose work.
+ */
+async function openDefinition(d) {
+  error.value = ''
+  notice.value = ''
+  if (modeler?.get('commandStack')?.canUndo()
+      && !window.confirm(`画布上有未部署的修改，载入「${d.key}」会覆盖它们，继续？`)) {
+    return
+  }
+  try {
+    const def = await definitionXml(d.key)
+    xmlText.value = def.xml
+    if (!def.renderable) {
+      // semantic-only deployment: the engine runs it, but there is nothing to
+      // draw. Show the source so the admin can rebuild it instead of staring
+      // at bpmn-js' "no diagram to display".
+      showXml.value = true
+      error.value = `「${def.processKey}」v${def.version} 部署时没有图形信息（BPMNDiagram），画布无法显示；`
+        + 'XML 已展开在下方，可据此重新设计，再以同名 key 部署（会生成新版本）。'
+      return
+    }
+    showXml.value = false
+    deployName.value = d.key
+    await importXml()
+    await nextTick()
+    fitViewport()
+    notice.value = `已载入 ${def.processKey} v${def.version}，再次部署将生成 v${def.version + 1}`
+  } catch (e) {
+    error.value = e.message
+  }
 }
 
 function fitViewport() {
@@ -555,6 +595,7 @@ onBeforeUnmount(() => {
           <td>v{{ d.version }}</td>
           <td>{{ d.suspended ? '已挂起' : '启用' }}</td>
           <td>
+            <button class="mini" @click="openDefinition(d)">载入设计器</button>
             <button class="mini" @click="pickForm(d.key)">编辑表单</button>
           </td>
         </tr>

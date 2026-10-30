@@ -19,6 +19,7 @@ import io.github.shiyi.auth.common.api.ErrorCode;
 import io.github.shiyi.auth.workflow.ai.WorkflowVar;
 import io.github.shiyi.auth.common.exception.BizException;
 import io.github.shiyi.auth.workflow.api.DefInfo;
+import io.github.shiyi.auth.workflow.api.DefinitionXml;
 import io.github.shiyi.auth.workflow.api.InstanceView;
 import io.github.shiyi.auth.workflow.api.StartResult;
 import io.github.shiyi.auth.workflow.api.TaskDetail;
@@ -85,6 +86,51 @@ public class WorkflowService {
                 .list().stream()
                 .map(WorkflowService::toDefInfo)
                 .toList();
+    }
+
+    /**
+     * The deployed BPMN source of the latest version of {@code processKey}.
+     *
+     * <p>Read straight from the deployment resource ({@code ACT_GE_BYTEARRAY}),
+     * not rebuilt from the parsed model: the designer must get back exactly what
+     * was deployed, otherwise a load-then-redeploy cycle would silently drop
+     * anything the converter does not round-trip.</p>
+     */
+    public DefinitionXml definitionXml(String processKey) {
+        ProcessDefinition definition = repository.createProcessDefinitionQuery()
+                .processDefinitionKey(processKey)
+                .latestVersion()
+                .singleResult();
+        if (definition == null) {
+            throw new BizException(ErrorCode.NOT_FOUND, "流程不存在：" + processKey);
+        }
+        try (java.io.InputStream in = repository.getResourceAsStream(
+                definition.getDeploymentId(), definition.getResourceName())) {
+            if (in == null) {
+                throw new BizException(ErrorCode.NOT_FOUND,
+                        "流程资源已丢失：" + definition.getResourceName());
+            }
+            return new DefinitionXml(definition.getKey(), definition.getName(),
+                    definition.getVersion(),
+                    hasDiagram(definition),
+                    new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8));
+        } catch (java.io.IOException e) {
+            throw new BizException(ErrorCode.INTERNAL_ERROR, "读取流程 XML 失败：" + e.getMessage());
+        }
+    }
+
+    /**
+     * Does this deployment carry graphical layout information?
+     *
+     * <p>Asked of the parsed model rather than the raw text: the converter is
+     * the same code path a renderer relies on, so "the location map is empty"
+     * and "bpmn-js will report no diagram" mean the same thing — no string
+     * sniffing for {@code BPMNDiagram}, no false positive from a namespace
+     * declaration.</p>
+     */
+    private boolean hasDiagram(ProcessDefinition definition) {
+        var model = repository.getBpmnModel(definition.getId());
+        return model != null && !model.getLocationMap().isEmpty();
     }
 
     private static DefInfo toDefInfo(ProcessDefinition d) {

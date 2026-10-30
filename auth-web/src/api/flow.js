@@ -6,6 +6,10 @@ export const listStartable = () => http.get('/api/v1/flow/startable').then((r) =
 
 export const listDefinitions = () => http.get('/api/v1/flow/definitions').then((r) => r.data.data)
 
+/** Deployed BPMN source of the latest version: { processKey, name, version, xml }. */
+export const definitionXml = (processKey) =>
+  http.get(`/api/v1/flow/definitions/${processKey}/xml`).then((r) => r.data.data)
+
 export const deployProcess = (name, bpmnXml) =>
   http.post('/api/v1/flow/deploy', { name, bpmnXml }).then((r) => r.data.data)
 

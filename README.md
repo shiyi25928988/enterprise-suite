@@ -258,7 +258,15 @@ on first boot.
   (task id/name, instance, candidate groups) through the M10 contact points.
 - **Frontend**: 我的申请 (dynamic form + my instances), 审批中心 (todo/done,
   AI badge, comments), 流程管理 (bpmn-js designer with XML import/export,
-  node name + candidate-roles editing, form schema editor).
+  "载入设计器" opens a deployed process, node name + candidate-roles editing,
+  form schema editor).
+- **Open a deployed process in the designer** (`GET /definitions/{key}/xml`,
+  ADMIN): returns the BPMN the engine actually deployed — the resource, not a
+  re-serialisation — plus `version` and a `renderable` flag. `renderable` is
+  computed from the parsed model's location map, so a semantic-only deployment
+  (engine fine, nothing to draw) is reported as such instead of handing bpmn-js
+  an XML it answers with "no diagram to display". Both shipped templates now
+  carry a full `BPMNDiagram`, so what ships is what you can open.
 - Ships the **请假审批** template (AI pre-review → manager approval →
   approve/reject gateway) on first boot.
 
@@ -319,6 +327,32 @@ Verified against real MySQL: anonymous → 401/`40100`; `secprobe`
 admin → 200 everywhere; `POST /deploy` without the CSRF header → 403 while the
 same call with it reaches the controller (400 on the deliberately invalid XML).
 19/19 assertions.
+
+### Load a deployed process back into the designer (2026-10-30)
+
+The designer could only create and deploy; there was no way back from a
+deployed process to the canvas, so every edit started from a blank page.
+
+- `GET /api/v1/flow/definitions/{key}/xml` (ADMIN) returns the deployed
+  resource itself, with `processKey` / `name` / `version` / `renderable`.
+- The shipped templates were semantic-only — the engine ran them, the canvas
+  could not draw them. Both now carry a complete `BPMNDiagram` (a shape per
+  flow node, two waypoints per sequence flow), which is also why a template
+  change is now a UI-visible change.
+- `renderable` separates "deployed without graphics" from "broken": the dialog
+  explains it and opens the XML source instead of leaving the admin with
+  bpmn-js' "no diagram to display".
+- Loading renames the deploy target to the loaded key, so 载入 → 改 → 部署
+  produces v(n+1) of the same process instead of forking a second one. An
+  edit in progress is protected by a confirm prompt (bpmn-js resets the command
+  stack on import, so "can undo" is exactly "has undeployed edits").
+
+Verified: 13/13 HTTP assertions (XML shape, DI completeness node-by-node and
+flow-by-flow, `renderable=true` for v3, `renderable=false` for the v1
+`purchase-approval` deployed before DI existed, employee 403, unknown key 404)
+and 13/13 browser assertions (six nodes rendered, deploy target follows the
+key, no prompt on a clean canvas, prompt after a real drag, canvas untouched
+when the target has no diagram).
 
 ### M5c: DingTalk scan login, badge QR, per-device token policy, anomaly detection (2026-10-30)
 
@@ -511,7 +545,7 @@ the rule table above it untouched:
 
 | Endpoint | Who |
 |---|---|
-| `POST /deploy`, `GET /definitions`, `GET /forms`, `PUT /forms/{key}`, `GET /analytics/**` | `ROLE_ADMIN` |
+| `POST /deploy`, `GET /definitions`, `GET /definitions/{key}/xml`, `GET /forms`, `PUT /forms/{key}`, `GET /analytics/**` | `ROLE_ADMIN` |
 | `GET /forms/{key}` | any signed-in employee (the form you have to fill in) |
 | start / todo / done / tasks / timeline | any signed-in employee |
 

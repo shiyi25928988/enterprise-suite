@@ -24,6 +24,7 @@ import io.github.shiyi.auth.workflow.form.FlowFormService;
 import io.github.shiyi.auth.workflow.flow.WorkflowService;
 import io.github.shiyi.auth.workflow.api.DefInfo;
 import io.github.shiyi.auth.workflow.api.DefinitionStats;
+import io.github.shiyi.auth.workflow.api.DefinitionXml;
 import io.github.shiyi.auth.workflow.api.InstanceView;
 import io.github.shiyi.auth.workflow.api.NodeStats;
 import io.github.shiyi.auth.workflow.api.Overview;
@@ -37,6 +38,7 @@ import io.github.shiyi.auth.workflow.api.TimelineStep;
  * <pre>
  *   POST /api/v1/flow/deploy                     deploy a BPMN XML           (ADMIN)
  *   GET  /api/v1/flow/definitions                process definitions         (ADMIN)
+ *   GET  /api/v1/flow/definitions/{key}/xml      deployed BPMN source        (ADMIN)
  *   GET  /api/v1/flow/forms                      form schemas                (ADMIN)
  *   PUT  /api/v1/flow/forms/{processKey}         upsert a form schema        (ADMIN)
  *   GET  /api/v1/flow/forms/{processKey}         one schema (any logged-in user)
@@ -94,6 +96,17 @@ public class FlowController {
     @PreAuthorize("hasRole('ADMIN')")
     public ApiResult<List<DefInfo>> definitions() {
         return ApiResult.ok(service().definitions());
+    }
+
+    /**
+     * The deployed BPMN source, for "open this process in the designer".
+     * ADMIN-only like the rest of the design-time surface: the XML is the whole
+     * routing logic, including who gets to approve what.
+     */
+    @GetMapping("/definitions/{processKey}/xml")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ApiResult<DefinitionXml> definitionXml(@PathVariable String processKey) {
+        return ApiResult.ok(service().definitionXml(processKey));
     }
 
     /** Anything a logged-in employee may start, with its form name for the picker. */
