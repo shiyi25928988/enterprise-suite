@@ -20,6 +20,29 @@ public interface UserAccountService {
      */
     Optional<UserAccount> findForWecomLogin(String wecomUserid);
 
+    /**
+     * Resolves the account for a DingTalk (钉钉) scan login (M5c). Same
+     * contract as {@link #findForWecomLogin}: bound dingtalk_userid first
+     * (sync-imported users match via external_id), then username auto-bind.
+     */
+    Optional<UserAccount> findForDingtalkLogin(String dingtalkUserid);
+
+    /**
+     * Resolves the account holding the given badge (工牌) code (M5c) —
+     * password-free login for shop-floor terminals. Random 43+ chars,
+     * unique; rotation invalidates the printed QR.
+     */
+    Optional<UserAccount> findByBadgeCode(String badgeCode);
+
+    /**
+     * Replaces the user's badge code with a fresh random one and returns it.
+     * Called from Security settings; the old printed QR stops working.
+     */
+    String rotateBadgeCode(Long userId);
+
+    /** Current badge code (Security settings renders it as a QR), null when never issued. */
+    String findBadgeCode(Long userId);
+
     /** Role codes of the user, empty when none. */
     java.util.List<String> findRoleCodes(Long userId);
 

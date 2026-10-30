@@ -32,6 +32,19 @@ public class GlobalExceptionHandler {
                 .body(ApiResult.fail(e.errorCode(), e.getMessage()));
     }
 
+    /**
+     * Controller-invoked authentication (WeCom/DingTalk QR, badge login) —
+     * surface as 40101 like the password filter does, so the SPA can branch
+     * on the same contract ("unbound account / invalid code / wrong badge").
+     */
+    @ExceptionHandler(org.springframework.security.core.AuthenticationException.class)
+    public ResponseEntity<ApiResult<Void>> handleAuth(
+            org.springframework.security.core.AuthenticationException e) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(ApiResult.fail(ErrorCode.BAD_CREDENTIALS,
+                        e.getMessage() == null ? "authentication failed" : e.getMessage()));
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResult<Void>> handleValidation(MethodArgumentNotValidException e) {
         String msg = e.getBindingResult().getFieldErrors().stream()

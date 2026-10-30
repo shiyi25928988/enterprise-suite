@@ -45,6 +45,8 @@ public class JsonUsernamePasswordFilter extends AbstractAuthenticationProcessing
         setAuthenticationFailureHandler(failureHandler);
         // Mandatory since Spring Security 6: persist the context into the HTTP session.
         setSecurityContextRepository(new HttpSessionSecurityContextRepository());
+        // M5c: audit + anomaly detection see the real client IP behind proxies
+        setAuthenticationDetailsSource(ForwardedAwareWebAuthenticationDetails.SOURCE);
         this.objectMapper = objectMapper;
     }
 

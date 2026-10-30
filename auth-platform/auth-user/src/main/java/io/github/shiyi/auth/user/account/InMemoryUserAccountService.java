@@ -87,6 +87,40 @@ public class InMemoryUserAccountService implements UserAccountService {
     }
 
     @Override
+    public Optional<UserAccount> findForDingtalkLogin(String dingtalkUserid) {
+        // in-memory fallback: treat the DingTalk userid as the username
+        return findByUsername(dingtalkUserid);
+    }
+
+    @Override
+    public Optional<UserAccount> findByBadgeCode(String badgeCode) {
+        return users.values().stream()
+                .filter(u -> badgeCode != null && badgeCode.equals(u.badgeCode()))
+                .findFirst();
+    }
+
+    @Override
+    public String rotateBadgeCode(Long userId) {
+        byte[] raw = new byte[32];
+        new java.security.SecureRandom().nextBytes(raw);
+        String code = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(raw);
+        users.replaceAll((k, v) -> v.id().equals(userId)
+                ? new UserAccount(v.id(), v.username(), v.password(), v.realName(), v.status(),
+                        v.mfaEnabled(), v.totpSecret(), code)
+                : v);
+        return code;
+    }
+
+    @Override
+    public String findBadgeCode(Long userId) {
+        return users.values().stream()
+                .filter(u -> u.id().equals(userId))
+                .findFirst()
+                .map(UserAccount::badgeCode)
+                .orElse(null);
+    }
+
+    @Override
     public List<String> findRoleCodes(Long userId) {
         return roles.getOrDefault(userId, List.of());
     }

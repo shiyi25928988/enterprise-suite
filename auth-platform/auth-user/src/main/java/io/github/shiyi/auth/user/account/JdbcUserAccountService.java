@@ -28,25 +28,34 @@ public class JdbcUserAccountService implements UserAccountService {
     private final int maxAgeDays;
     /** Optional — auto-lock events fan out here when contact points exist. */
     private final ObjectProvider<NotificationService> notifications;
+    /** Optional (M5c) — login anomaly rules; null disables detection. */
+    private final io.github.shiyi.auth.user.anomaly.AnomalyDetector anomaly;
     private final org.springframework.security.crypto.password.PasswordEncoder encoder =
             org.springframework.security.crypto.factory.PasswordEncoderFactories
                     .createDelegatingPasswordEncoder();
 
     public JdbcUserAccountService(SysUserMapper userMapper, SysLoginLogMapper loginLogMapper) {
-        this(userMapper, loginLogMapper, 0, null);
+        this(userMapper, loginLogMapper, 0, null, null);
     }
 
     public JdbcUserAccountService(SysUserMapper userMapper, SysLoginLogMapper loginLogMapper,
                                   int maxAgeDays) {
-        this(userMapper, loginLogMapper, maxAgeDays, null);
+        this(userMapper, loginLogMapper, maxAgeDays, null, null);
     }
 
     public JdbcUserAccountService(SysUserMapper userMapper, SysLoginLogMapper loginLogMapper,
                                   int maxAgeDays, ObjectProvider<NotificationService> notifications) {
+        this(userMapper, loginLogMapper, maxAgeDays, notifications, null);
+    }
+
+    public JdbcUserAccountService(SysUserMapper userMapper, SysLoginLogMapper loginLogMapper,
+                                  int maxAgeDays, ObjectProvider<NotificationService> notifications,
+                                  io.github.shiyi.auth.user.anomaly.AnomalyDetector anomaly) {
         this.userMapper = userMapper;
         this.loginLogMapper = loginLogMapper;
         this.maxAgeDays = maxAgeDays;
         this.notifications = notifications;
+        this.anomaly = anomaly;
     }
 
     @Override
@@ -91,6 +100,70 @@ public class JdbcUserAccountService implements UserAccountService {
                 user.getPassword(), user.getRealName(), user.getStatus(),
                 user.getMfaEnabled() != null && user.getMfaEnabled() == 1,
                 user.getTotpSecret()));
+    }
+
+    @Override
+    public Optional<UserAccount> findForDingtalkLogin(String dingtalkUserid) {
+        // bound column first; sync-imported users carry the same id in
+        // external_id (external_source='dingtalk') and bind on first login
+        SysUser user = userMapper.selectOne(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<SysUser>()
+                        .eq(SysUser::getDingtalkUserid, dingtalkUserid));
+        if (user == null) {
+            user = userMapper.selectOne(
+                    new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<SysUser>()
+                            .eq(SysUser::getExternalSource, "dingtalk")
+                            .eq(SysUser::getExternalId, dingtalkUserid));
+        }
+        if (user == null) {
+            // auto-bind: DingTalk userid matching an existing username
+            SysUser candidate = userMapper.selectOne(
+                    new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<SysUser>()
+                            .eq(SysUser::getUsername, dingtalkUserid));
+            if (candidate == null) {
+                return Optional.empty();
+            }
+            userMapper.update(null, new LambdaUpdateWrapper<SysUser>()
+                    .eq(SysUser::getId, candidate.getId())
+                    .set(SysUser::getDingtalkUserid, dingtalkUserid));
+            user = candidate;
+        }
+        return Optional.of(toAccount(user));
+    }
+
+    @Override
+    public Optional<UserAccount> findByBadgeCode(String badgeCode) {
+        if (badgeCode == null || badgeCode.length() < 16) {
+            return Optional.empty(); // badge codes are 43+ chars — cheap reject
+        }
+        SysUser user = userMapper.selectOne(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<SysUser>()
+                        .eq(SysUser::getBadgeCode, badgeCode));
+        return user == null ? Optional.empty() : Optional.of(toAccount(user));
+    }
+
+    @Override
+    public String rotateBadgeCode(Long userId) {
+        byte[] raw = new byte[32];
+        new java.security.SecureRandom().nextBytes(raw);
+        String code = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(raw);
+        userMapper.update(null, new LambdaUpdateWrapper<SysUser>()
+                .eq(SysUser::getId, userId)
+                .set(SysUser::getBadgeCode, code));
+        return code;
+    }
+
+    @Override
+    public String findBadgeCode(Long userId) {
+        SysUser user = userMapper.selectById(userId);
+        return user == null ? null : user.getBadgeCode();
+    }
+
+    private static UserAccount toAccount(SysUser user) {
+        return new UserAccount(user.getId(), user.getUsername(),
+                user.getPassword(), user.getRealName(), user.getStatus(),
+                user.getMfaEnabled() != null && user.getMfaEnabled() == 1,
+                user.getTotpSecret());
     }
 
     @Override
@@ -160,6 +233,11 @@ public class JdbcUserAccountService implements UserAccountService {
                 .eq(SysUser::getUsername, username)
                 .set(SysUser::getFailCount, 0)
                 .set(SysUser::getLastLoginTime, LocalDateTime.now()));
+        // detection BEFORE recording: otherwise this very login pollutes the
+        // "locations already seen" history and new_location can never fire
+        if (anomaly != null) {
+            anomaly.onLoginSuccess(username, ip);
+        }
         record(loginType, username, userId, true, null, ip, userAgent);
     }
 
@@ -188,6 +266,9 @@ public class JdbcUserAccountService implements UserAccountService {
                     "ip", ip == null ? "" : ip)));
         }
         record(loginType, username, userId, false, failReason, ip, userAgent);
+        if (anomaly != null) {
+            anomaly.onLoginFailure(username, ip);
+        }
         return locked;
     }
 

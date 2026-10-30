@@ -295,6 +295,47 @@ complete), transfer, `task.overdue` webhook delivered with due date and
 overdue millis, analytics endpoints populated correctly, timeline shows every
 activity including both countersign instances.
 
+### M5c: DingTalk scan login, badge QR, per-device token policy, anomaly detection (2026-10-30)
+
+- **DingTalk scan login** (`auth.dingtalk.*`, off by default):
+  `/api/auth/dingtalk/config` hands the SPA the app key and redirect target;
+  `/api/auth/dingtalk/login` exchanges the scanned `authCode` for an identity.
+  `api.dingtalk.com` OAuth2 (`/v1.0/oauth2/userAccessToken` →
+  `/v1.0/contact/users/me`) yields a **unionId**, which
+  `oapi.dingtalk.com/topapi/user/getbyunionid` maps to the corporate userid. The
+  first login auto-binds the local account (username match into
+  `sys_user.dingtalk_userid`, unique); later logins resolve straight through the
+  bound column. The client uses a raw `java.net.http.HttpClient` with an explicit
+  `Content-Type: application/json` — the `RestClient` map-body builder delivered an
+  empty `{}` to the stub, the same pitfall the M8 sync client already sidesteps.
+- **Badge QR login** (工牌二维码): `sys_user.badge_code` holds a 32-byte
+  `SecureRandom` token (base64url, 43 chars, unique). `/api/auth/badge/login` is
+  passwordless but audited (type `BADGE`, code masked to its first 6 chars);
+  `/api/auth/badge/rotate` reissues it and the previous code stops working
+  immediately. The SPA renders `/api/auth/badge/mine` as a QR image client-side.
+- **Per-device token policy**: `sys_app.access_token_ttl_minutes` /
+  `device_code_ttl_minutes` flow into the registered client's `TokenSettings`, so a
+  workshop screen can carry a 90-minute access token while the console keeps the
+  platform default. Unset (or < 1) falls back to 30 / 10 minutes; on update a `0`
+  explicitly clears a custom value back to the default, `null` keeps it.
+- **Login anomaly detection** (`auth.anomaly.*`): two rules publish `login.anomaly`
+  through the existing notification contact points — `new_location` (the client's
+  /24 appears nowhere in the last 30 days of successful logins) and `brute_force`
+  (failure count exactly at the threshold inside the window, so a burst alerts once
+  instead of on every attempt). Detection runs **before** the audit row is written;
+  otherwise the current attempt would pollute its own history.
+  `ForwardedAwareWebAuthenticationDetails` makes `getRemoteAddress()` honour
+  `X-Forwarded-For` rather than the proxy hop.
+- **Error surface**: an `AuthenticationException` thrown inside a controller (invalid
+  badge code, expired DingTalk code) is translated to `401 / 40101` by the global
+  handler instead of surfacing as a 500.
+
+Verified E2E against stub APIs: DingTalk first-login auto-bind followed by a
+bound-column login, badge login plus rotation (old code rejected, new one accepted),
+`new_location` fired once for a fresh /24 and not again from the same subnet,
+`brute_force` fired exactly once at the fifth failure, and per-device TTLs read back
+from `oauth2_registered_client.token_settings` (`PT1H30M` / `PT25M`).
+
 ### Frontend SPA (auth-web)
 
 > Access control: the admin console is restricted to users holding the
@@ -345,7 +386,8 @@ so browser traffic is same-origin — the same topology as production.
 - [x] W2 workflow advanced: parallel countersign (one-veto rule), delegation
       & transfer, SLA due dates + overdue webhooks, process analytics
       (cycle time per definition and per node)
-- [ ] M5c: DingTalk QR login, badge QR, per-device token policies, anomaly detection
+- [x] M5c: DingTalk QR login, badge QR, per-device token policies, anomaly detection
+      (new-location + brute-force rules → `login.anomaly` webhooks)
 - [ ] M10b: LDAP provider (same SPI), email contact points
 
 See the [development doc](docs/) (Chinese) for the full specification.

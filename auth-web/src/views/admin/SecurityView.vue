@@ -1,5 +1,6 @@
 <script setup>
 import { onMounted, reactive, ref } from 'vue'
+import QRCode from 'qrcode'
 import http from '../../api/http'
 
 const status = ref({ enabled: false, username: '' })
@@ -8,10 +9,25 @@ const setup = reactive({ secret: '', otpauthUri: '' })
 const code = reactive({ confirm: '', disable: '' })
 const step = ref('idle') // idle | scanning
 
+// M5c badge (工牌) code + QR
+const badge = reactive({ code: '', qrDataUrl: '' })
+
 async function load() {
   error.value = ''
   try {
     status.value = await http.get('/api/auth/mfa/status').then((r) => r.data.data)
+  } catch (e) {
+    error.value = e.message
+  }
+}
+
+async function renderBadgeQr() {
+  try {
+    const data = await http.post('/api/auth/badge/rotate').then((r) => r.data.data)
+    badge.code = data.badgeCode
+    badge.qrDataUrl = await QRCode.toDataURL(
+      `${window.location.origin}/badge-login?code=${encodeURIComponent(data.badgeCode)}`,
+      { width: 180, margin: 1 })
   } catch (e) {
     error.value = e.message
   }
@@ -91,6 +107,18 @@ onMounted(load)
       <input v-model="code.disable" inputmode="numeric" maxlength="6" placeholder="6 位动态码" />
       <button @click="disable">关闭两步验证</button>
     </template>
+
+    <hr style="margin: 20px 0; border: none; border-top: 1px solid var(--border);" />
+    <h3 style="margin: 0 0 8px;">工牌二维码登录</h3>
+    <p class="muted">
+      生成印在工牌上的二维码：手机扫码即免密登录平台（无需输密码）。
+      每次重新生成都会使旧二维码失效——工牌丢失时重新生成即可。
+    </p>
+    <div v-if="badge.qrDataUrl" class="badge-box">
+      <img :src="badge.qrDataUrl" alt="工牌登录二维码" width="180" height="180" />
+      <p class="muted" style="word-break: break-all; font-size: 11px; max-width: 220px;">{{ badge.code }}</p>
+    </div>
+    <button @click="renderBadgeQr">{{ badge.qrDataUrl ? '重新生成（旧码失效）' : '生成工牌二维码' }}</button>
   </div>
 </template>
 
@@ -102,4 +130,5 @@ onMounted(load)
   background: #f1f5f9; padding: 10px; border-radius: 6px;
   font-size: 12px; word-break: break-all; white-space: pre-wrap;
 }
+.badge-box { display: inline-flex; flex-direction: column; align-items: center; gap: 8px; margin: 8px 0; }
 </style>

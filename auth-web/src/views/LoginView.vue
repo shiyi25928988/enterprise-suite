@@ -15,6 +15,8 @@ const error = ref('')
 const loading = ref(false)
 const wecomEnabled = ref(false)
 const wecomConfig = ref(null)
+const dingtalkEnabled = ref(false)
+const dingtalkConfig = ref(null)
 
 // second factor state
 const mfa = reactive({ challengeId: '', code: '' })
@@ -25,6 +27,11 @@ onMounted(async () => {
     const cfg = await http.get('/api/auth/wecom/config').then((r) => r.data?.data)
     wecomEnabled.value = !!cfg?.enabled
     wecomConfig.value = cfg
+  } catch { /* ignore */ }
+  try {
+    const cfg = await http.get('/api/auth/dingtalk/config').then((r) => r.data?.data)
+    dingtalkEnabled.value = !!cfg?.enabled
+    dingtalkConfig.value = cfg
   } catch { /* ignore */ }
 })
 
@@ -77,11 +84,15 @@ function mapError(e) {
   }
 }
 
+function randomState() {
+  return btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(12))))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
 async function startWecomLogin() {
   const cfg = wecomConfig.value || {}
   const redirectUri = cfg.redirectUri || `${window.location.origin}/wecom-callback`
-  const state = btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(12))))
-    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+  const state = randomState()
   sessionStorage.setItem('wecom.state', state)
   const params = new URLSearchParams({
     login_type: 'CorpApp',
@@ -92,6 +103,23 @@ async function startWecomLogin() {
   })
   window.location.assign(
     `https://login.work.weixin.qq.com/wwlogin/sso/login?${params}`)
+}
+
+// M5c: DingTalk QR login — the code lands on /dingtalk-callback
+function startDingtalkLogin() {
+  const cfg = dingtalkConfig.value || {}
+  const redirectUri = cfg.redirectUri || `${window.location.origin}/dingtalk-callback`
+  const state = randomState()
+  sessionStorage.setItem('dingtalk.state', state)
+  const params = new URLSearchParams({
+    redirect_uri: redirectUri,
+    response_type: 'code',
+    client_id: cfg.appKey,
+    scope: 'openid',
+    state,
+    prompt: 'consent',
+  })
+  window.location.assign(`https://login.dingtalk.com/oauth2/auth?${params}`)
 }
 </script>
 
@@ -109,6 +137,9 @@ async function startWecomLogin() {
         </button>
         <button v-if="wecomEnabled" type="button" class="secondary" @click="startWecomLogin">
           企业微信扫码登录
+        </button>
+        <button v-if="dingtalkEnabled" type="button" class="secondary" @click="startDingtalkLogin">
+          钉钉扫码登录
         </button>
         <button type="button" class="secondary" @click="startOidcLogin()">
           OIDC 授权码流程（SSO 演示）

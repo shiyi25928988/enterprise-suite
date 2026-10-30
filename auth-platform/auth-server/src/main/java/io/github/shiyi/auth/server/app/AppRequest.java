@@ -23,5 +23,7 @@ public record AppRequest(
         String scopes,
         String accessPolicy,
         Integer sortNo,
-        Integer status) {
+        Integer status,
+        Integer accessTokenTtlMinutes,
+        Integer deviceCodeTtlMinutes) {
 }

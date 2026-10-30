@@ -152,6 +152,8 @@ public class SecurityConfig {
             .authorizeHttpRequests(authorize -> authorize
                     .requestMatchers("/api/auth/csrf", "/api/auth/login",
                             "/api/auth/wecom/config", "/api/auth/wecom/login",
+                            "/api/auth/dingtalk/config", "/api/auth/dingtalk/login",
+                            "/api/auth/badge/login",
                             "/api/auth/mfa/verify").permitAll()
                     .anyRequest().authenticated())
             .csrf(csrf -> csrf
@@ -177,7 +179,7 @@ public class SecurityConfig {
     SecurityFilterChain defaultSecurityFilterChain(HttpSecurity http) throws Exception {
         http.authorizeHttpRequests(authorize -> authorize
                 .requestMatchers("/login", "/index.html", "/error", "/assets/**", "/403",
-                        "/callback", "/wecom-callback").permitAll()
+                        "/callback", "/wecom-callback", "/dingtalk-callback", "/badge-login").permitAll()
                 // probe endpoints: liveness/readiness must not require a session;
                 // prometheus must be reachable by the scraper — restrict via network
                 // policy in production, the payload contains request-URI metrics

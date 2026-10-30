@@ -5,6 +5,8 @@ const routes = [
   { path: '/login', name: 'login', component: () => import('../views/LoginView.vue'), meta: { bare: true } },
   { path: '/callback', name: 'callback', component: () => import('../views/CallbackView.vue'), meta: { bare: true } },
   { path: '/wecom-callback', name: 'wecom-callback', component: () => import('../views/WecomCallbackView.vue'), meta: { bare: true } },
+  { path: '/dingtalk-callback', name: 'dingtalk-callback', component: () => import('../views/DingtalkCallbackView.vue'), meta: { bare: true } },
+  { path: '/badge-login', name: 'badge-login', component: () => import('../views/BadgeLoginView.vue'), meta: { bare: true } },
   // standalone page: reachable both voluntarily and when the account still
   // carries its initial password (the guard forces it)
   { path: '/password', name: 'password', component: () => import('../views/PasswordView.vue'), meta: { bare: true, requiresAuth: true } },

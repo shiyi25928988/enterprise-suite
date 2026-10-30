@@ -152,15 +152,19 @@ public class AppRegistryService {
         validate(appName, clientType, grants, redirects, scopes);
 
         String plainSecret = TYPE_CONFIDENTIAL.equals(clientType) ? newSecret() : null;
+        Integer accessTtl = ttlOrKeep(req.accessTokenTtlMinutes(), null);
+        Integer deviceTtl = ttlOrKeep(req.deviceCodeTtlMinutes(), null);
         RegisteredClient client = buildClient(UUID.randomUUID().toString(), clientId, appName, clientType,
-                grants, redirects, postLogout, scopes, null, plainSecret);
+                grants, redirects, postLogout, scopes, null, plainSecret,
+                accessTtl, deviceTtl);
         clients.save(client);
 
         jdbc.update("""
                 INSERT INTO sys_app (app_code, app_name, registered_client_id, client_id, description,
                                      icon, home_url, client_type, redirect_uris, post_logout_redirect_uris,
-                                     grant_types, scopes, access_policy, sort_no, status)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                     grant_types, scopes, access_policy, sort_no, status,
+                                     access_token_ttl_minutes, device_code_ttl_minutes)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 appCode, appName, client.getId(), clientId, req.description(),
                 blankTo(req.icon(), appCode.substring(0, 1).toUpperCase()),
@@ -168,7 +172,9 @@ public class AppRegistryService {
                 String.join(",", redirects), String.join(",", postLogout),
                 String.join(",", grants), String.join(",", scopes),
                 normalizePolicy(req.accessPolicy()), req.sortNo() == null ? 0 : req.sortNo(),
-                req.status() == null ? 1 : req.status());
+                req.status() == null ? 1 : req.status(),
+                req.accessTokenTtlMinutes() == null || req.accessTokenTtlMinutes() < 1 ? null : req.accessTokenTtlMinutes(),
+                req.deviceCodeTtlMinutes() == null || req.deviceCodeTtlMinutes() < 1 ? null : req.deviceCodeTtlMinutes());
 
         Long id = jdbc.queryForObject("SELECT id FROM sys_app WHERE client_id = ?", Long.class, clientId);
         log.info("Registered application '{}' (client_id={}, type={}, policy={})",
@@ -199,14 +205,17 @@ public class AppRegistryService {
         }
         RegisteredClient rebuilt = buildClient(existing.getId(), current.clientId(), appName, clientType,
                 grants, redirects, postLogout, scopes,
-                TYPE_CONFIDENTIAL.equals(clientType) ? existing.getClientSecret() : null, null);
+                TYPE_CONFIDENTIAL.equals(clientType) ? existing.getClientSecret() : null, null,
+                ttlOrKeep(req.accessTokenTtlMinutes(), current.accessTokenTtlMinutes()),
+                ttlOrKeep(req.deviceCodeTtlMinutes(), current.deviceCodeTtlMinutes()));
         clients.save(rebuilt);
 
         jdbc.update("""
                 UPDATE sys_app
                    SET app_name = ?, description = ?, icon = ?, home_url = ?, client_type = ?,
                        redirect_uris = ?, post_logout_redirect_uris = ?, grant_types = ?, scopes = ?,
-                       access_policy = ?, sort_no = ?, status = ?
+                       access_policy = ?, sort_no = ?, status = ?,
+                       access_token_ttl_minutes = ?, device_code_ttl_minutes = ?
                  WHERE id = ?
                 """,
                 appName, req.description() == null ? current.description() : req.description(),
@@ -216,7 +225,10 @@ public class AppRegistryService {
                 String.join(",", grants), String.join(",", scopes),
                 req.accessPolicy() == null ? current.accessPolicy() : normalizePolicy(req.accessPolicy()),
                 req.sortNo() == null ? current.sortNo() : req.sortNo(),
-                req.status() == null ? current.status() : req.status(), id);
+                req.status() == null ? current.status() : req.status(),
+                ttlOrKeep(req.accessTokenTtlMinutes(), current.accessTokenTtlMinutes()),
+                ttlOrKeep(req.deviceCodeTtlMinutes(), current.deviceCodeTtlMinutes()),
+                id);
         return get(id);
     }
 
@@ -264,7 +276,8 @@ public class AppRegistryService {
                         .map(AuthorizationGrantType::getValue).toList()),
                 new ArrayList<>(existing.getRedirectUris()),
                 new ArrayList<>(existing.getPostLogoutRedirectUris()),
-                new ArrayList<>(existing.getScopes()), null, plain);
+                new ArrayList<>(existing.getScopes()), null, plain,
+                app.accessTokenTtlMinutes(), app.deviceCodeTtlMinutes());
         clients.save(rebuilt);
         log.info("Rotated client secret for application '{}'", app.appCode());
         return plain;
@@ -327,6 +340,7 @@ public class AppRegistryService {
             out.add(new AppDTO(a.id(), a.appCode(), a.appName(), a.clientId(), a.description(), a.icon(),
                     a.homeUrl(), a.clientType(), a.redirectUris(), a.postLogoutRedirectUris(),
                     a.grantTypes(), a.scopes(), a.accessPolicy(), a.sortNo(), a.status(),
+                    a.accessTokenTtlMinutes(), a.deviceCodeTtlMinutes(),
                     roleIds.getOrDefault(a.id(), List.of()),
                     roleNames.getOrDefault(a.id(), List.of()), a.createTime()));
         }
@@ -350,15 +364,23 @@ public class AppRegistryService {
                 rs.getString("access_policy"),
                 rs.getInt("sort_no"),
                 rs.getInt("status"),
+                getObjectOrNull(rs, "access_token_ttl_minutes", Integer.class),
+                getObjectOrNull(rs, "device_code_ttl_minutes", Integer.class),
                 List.of(), List.of(),
                 rs.getTimestamp("create_time") == null ? null
                         : rs.getTimestamp("create_time").toLocalDateTime());
     }
 
+    private static <T> T getObjectOrNull(ResultSet rs, String column, Class<T> type) throws SQLException {
+        T value = rs.getObject(column, type);
+        return rs.wasNull() ? null : value;
+    }
+
     private RegisteredClient buildClient(String id, String clientId, String name, String clientType,
                                          List<String> grants, List<String> redirects,
                                          List<String> postLogout, List<String> scopes,
-                                         String existingEncodedSecret, String plainSecret) {
+                                         String existingEncodedSecret, String plainSecret,
+                                         Integer accessTokenTtlMinutes, Integer deviceCodeTtlMinutes) {
         boolean confidential = TYPE_CONFIDENTIAL.equals(clientType);
         RegisteredClient.Builder b = RegisteredClient.withId(id)
                 .clientId(clientId)
@@ -382,9 +404,12 @@ public class AppRegistryService {
                 .requireProofKey(!confidential)
                 .build());
         b.tokenSettings(TokenSettings.builder()
-                .accessTokenTimeToLive(Duration.ofMinutes(30))
+                // M5c per-device token policy: null falls back to platform defaults
+                .accessTokenTimeToLive(Duration.ofMinutes(
+                        accessTokenTtlMinutes == null || accessTokenTtlMinutes < 1 ? 30 : accessTokenTtlMinutes))
                 .refreshTokenTimeToLive(Duration.ofHours(8))
-                .deviceCodeTimeToLive(Duration.ofMinutes(10))
+                .deviceCodeTimeToLive(Duration.ofMinutes(
+                        deviceCodeTtlMinutes == null || deviceCodeTtlMinutes < 1 ? 10 : deviceCodeTtlMinutes))
                 .reuseRefreshTokens(false)
                 .build());
         return b.build();
@@ -467,6 +492,18 @@ public class AppRegistryService {
 
     private static String emptyToNull(String value) {
         return (value == null || value.isBlank()) ? null : value.trim();
+    }
+
+    /**
+     * Token/device-code TTL semantics for updates: {@code null} keeps the current value (PATCH style),
+     * a value below 1 clears the column so {@link #buildClient} falls back to the platform default
+     * (30 min / 10 min). Without the explicit reset an admin could set a custom TTL but never undo it.
+     */
+    private static Integer ttlOrKeep(Integer requested, Integer currentValue) {
+        if (requested == null) {
+            return currentValue;
+        }
+        return requested < 1 ? null : requested;
     }
 
     private static String newSecret() {

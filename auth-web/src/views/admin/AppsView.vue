@@ -36,6 +36,7 @@ const emptyForm = () => ({
   clientType: 'PUBLIC', redirectUris: '', postLogoutRedirectUris: '',
   grantTypes: ['authorization_code'], scopes: 'openid,profile',
   accessPolicy: 'ROLES', sortNo: 0, status: 1,
+  accessTokenTtlMinutes: null, deviceCodeTtlMinutes: null,
 })
 const form = reactive(emptyForm())
 
@@ -68,14 +69,24 @@ function openEdit(app) {
     accessPolicy: app.accessPolicy,
     sortNo: app.sortNo ?? 0,
     status: app.status,
+    accessTokenTtlMinutes: app.accessTokenTtlMinutes ?? null,
+    deviceCodeTtlMinutes: app.deviceCodeTtlMinutes ?? null,
   })
   showForm.value = true
 }
 
+// v-model.number yields '' when the input is cleared, and an empty string would be sent as a
+// non-numeric value for an Integer field. Normalise before submit: '' -> null (keep / default).
+const ttlOf = (v) => (v === '' || v === null || v === undefined ? null : Number(v))
+
 async function submitForm() {
   error.value = ''
   try {
-    const payload = { ...form }
+    const payload = {
+      ...form,
+      accessTokenTtlMinutes: ttlOf(form.accessTokenTtlMinutes),
+      deviceCodeTtlMinutes: ttlOf(form.deviceCodeTtlMinutes),
+    }
     if (editing.value) {
       await updateApp(editing.value.id, payload)
       showForm.value = false
@@ -300,6 +311,16 @@ const policyLabel = (app) =>
       <div>
         <label>排序（越小越靠前）</label>
         <input v-model.number="form.sortNo" type="number" />
+      </div>
+      <div>
+        <label>访问令牌有效期（分钟，留空=保持原值，填 0=恢复默认 30）</label>
+        <input v-model.number="form.accessTokenTtlMinutes" type="number" min="0"
+               placeholder="30" />
+      </div>
+      <div>
+        <label>设备码有效期（分钟，留空=保持原值，填 0=恢复默认 10，仅设备码流程生效）</label>
+        <input v-model.number="form.deviceCodeTtlMinutes" type="number" min="0"
+               placeholder="10" />
       </div>
       <p v-if="error" class="error full">{{ error }}</p>
       <div class="full actions">

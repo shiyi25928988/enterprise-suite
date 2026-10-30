@@ -9,6 +9,8 @@ import java.util.List;
  * @param roleIds   roles allowed to access the app (only meaningful when
  *                  {@code accessPolicy = ROLES})
  * @param roleNames display names for {@code roleIds}, in the same order
+ * @param accessTokenTtlMinutes M5c per-device access token TTL; null = default 30
+ * @param deviceCodeTtlMinutes M5c per-device device-code TTL; null = default 10
  */
 public record AppDTO(
         Long id,
@@ -26,6 +28,8 @@ public record AppDTO(
         String accessPolicy,
         Integer sortNo,
         Integer status,
+        Integer accessTokenTtlMinutes,
+        Integer deviceCodeTtlMinutes,
         List<Long> roleIds,
         List<String> roleNames,
         LocalDateTime createTime) {

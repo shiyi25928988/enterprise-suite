@@ -52,6 +52,8 @@ import io.github.shiyi.auth.user.service.UserService;
  */
 @Configuration
 @EnableScheduling
+@org.springframework.boot.context.properties.EnableConfigurationProperties(
+        io.github.shiyi.auth.user.anomaly.AnomalyProperties.class)
 public class UserDomainConfig {
 
     /** Daily purge of audit rows past auth.audit.retention-days (no-op in-memory). */
@@ -85,8 +87,19 @@ public class UserDomainConfig {
     UserAccountService jdbcUserAccountService(SysUserMapper userMapper, SysLoginLogMapper loginLogMapper,
             @org.springframework.beans.factory.annotation.Value(
                     "${auth.password.max-age-days:90}") int passwordMaxAgeDays,
-            org.springframework.beans.factory.ObjectProvider<io.github.shiyi.auth.user.notify.NotificationService> notifications) {
-        return new JdbcUserAccountService(userMapper, loginLogMapper, passwordMaxAgeDays, notifications);
+            org.springframework.beans.factory.ObjectProvider<io.github.shiyi.auth.user.notify.NotificationService> notifications,
+            org.springframework.context.ApplicationContext context) {
+        // M5c anomaly detection: optional webhook-driven rules observing the
+        // same audit rows the login audit API exposes
+        io.github.shiyi.auth.user.anomaly.AnomalyDetector detector = null;
+        var anomalyProps = context.getBeanProvider(io.github.shiyi.auth.user.anomaly.AnomalyProperties.class)
+                .getIfAvailable();
+        var notify = notifications.getIfAvailable();
+        if (anomalyProps != null && notify != null) {
+            detector = new io.github.shiyi.auth.user.anomaly.AnomalyDetector(loginLogMapper, notify, anomalyProps);
+        }
+        return new JdbcUserAccountService(userMapper, loginLogMapper, passwordMaxAgeDays,
+                notifications, detector);
     }
 
     @Bean

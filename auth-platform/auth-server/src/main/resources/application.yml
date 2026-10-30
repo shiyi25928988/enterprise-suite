@@ -77,6 +77,20 @@ auth:
     csv:
       enabled: false
       # path: /data/hr/export.csv
+  # M5c DingTalk scan login (钉钉扫码) — same shape as the WeCom block.
+  # api-base-url / oapi-base-url exist so tests can point at a stub.
+  dingtalk:
+    enabled: false
+    # app-key: dingxxxx
+    # app-secret: ${DINGTALK_SECRET}
+    # redirect-uri: https://iam.example.com/dingtalk-callback
+  # M5c login anomaly detection — new-location + brute-force rules publishing
+  # "login.anomaly" through the notification contact points.
+  anomaly:
+    enabled: true
+    location-window-days: 30
+    brute-threshold: 5
+    brute-window-minutes: 10
   # M10 notification contact points — events (account.locked, sync.completed,
   # sync.failed) fan out as JSON POSTs to every active webhook.
   notify:

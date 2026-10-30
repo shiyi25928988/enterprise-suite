@@ -72,8 +72,10 @@ public class WeComAuthController {
             throw new BizException(ErrorCode.BAD_REQUEST, "missing code");
         }
 
-        Authentication authentication =
-                authenticationManager.authenticate(new WeComAuthenticationToken(code));
+        var token = new WeComAuthenticationToken(code);
+        // M5c: audit rows and anomaly rules see the proxied client IP, not ours
+        token.setDetails(new io.github.shiyi.auth.server.auth.ForwardedAwareWebAuthenticationDetails(request));
+        Authentication authentication = authenticationManager.authenticate(token);
 
         // persist the session context exactly like the JSON login filter does
         // (Security 6+ does not store the context automatically)

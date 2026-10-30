@@ -40,6 +40,12 @@ public class SysUser {
 
     private String wecomUserid;
 
+    /** DingTalk (钉钉) scan-login binding, mirrors wecomUserid (M5c) */
+    private String dingtalkUserid;
+
+    /** Printable badge (工牌) secret shown as a QR; scanning it logs the holder in (M5c) */
+    private String badgeCode;
+
     /** Directory sync origin: "wecom" / "dingtalk" / null for local users */
     private String externalSource;
 
