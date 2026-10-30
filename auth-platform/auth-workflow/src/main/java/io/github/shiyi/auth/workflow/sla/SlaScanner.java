@@ -11,12 +11,13 @@ import org.flowable.task.api.Task;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import io.github.shiyi.auth.user.notify.NotificationService;
+import io.github.shiyi.auth.workflow.notify.WorkflowNotifier;
+
 
 /**
  * W2: SLA overdue scanner — a fixed-delay sweep over active tasks whose
- * BPMN-declared due date has passed, publishing a {@code task.overdue}
- * webhook per task (exactly once, via a comment marker). This is deliberately
+ * BPMN-declared due date has passed, publishing a {@code task.overdue} event
+ * per task (exactly once, via a comment marker). This is deliberately
  * polling instead of boundary timer events: timers die with the engine's async
  * executor (disabled in this deployment), and reminder policy then lives with
  * the platform, not the process XML.
@@ -28,11 +29,11 @@ public class SlaScanner {
     private static final String MARKER = "sla-overdue:";
 
     private final TaskService tasks;
-    private final NotificationService notifications;
+    private final WorkflowNotifier notifier;
 
-    public SlaScanner(TaskService tasks, NotificationService notifications) {
+    public SlaScanner(TaskService tasks, WorkflowNotifier notifier) {
         this.tasks = tasks;
-        this.notifications = notifications;
+        this.notifier = notifier;
     }
 
     @org.springframework.scheduling.annotation.Scheduled(
@@ -56,7 +57,7 @@ public class SlaScanner {
             payload.put("dueDate", task.getDueDate() == null ? null
                     : task.getDueDate().toInstant().atZone(ZoneId.systemDefault()).toString());
             payload.put("overdueMs", now.getTime() - task.getDueDate().getTime());
-            notifications.publish("task.overdue", payload);
+            notifier.notify("task.overdue", payload);
             tasks.addComment(task.getId(), task.getProcessInstanceId(),
                     MARKER + task.getId());
             log.info("SLA: task {} ({}) overdue by {} ms — notified",

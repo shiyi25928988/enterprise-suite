@@ -9,20 +9,18 @@ import org.flowable.common.engine.api.delegate.event.FlowableEvent;
 import org.flowable.common.engine.api.delegate.event.FlowableEventListener;
 import org.flowable.task.service.impl.persistence.entity.TaskEntity;
 
-import io.github.shiyi.auth.user.notify.NotificationService;
 
 /**
- * W1-6: bridges engine events into the platform's notification contact points
- * (M10 webhooks). Only task creation is published — everyone who can act on a
+ * W1-6: bridges engine events into the module's notifier port. Only task creation is published — everyone who can act on a
  * new task learns about it without polling; completion is visible in the
  * history API instead of being spammed to every webhook.
  */
 public class TaskCreatedNotifier implements FlowableEventListener {
 
-    private final NotificationService notifications;
+    private final WorkflowNotifier notifier;
 
-    public TaskCreatedNotifier(NotificationService notifications) {
-        this.notifications = notifications;
+    public TaskCreatedNotifier(WorkflowNotifier notifier) {
+        this.notifier = notifier;
     }
 
     @Override
@@ -43,7 +41,7 @@ public class TaskCreatedNotifier implements FlowableEventListener {
                 .map(l -> l.getGroupId())
                 .distinct()
                 .toList());
-        notifications.publish("task.assigned", payload);
+        notifier.notify("task.assigned", payload);
     }
 
     @Override

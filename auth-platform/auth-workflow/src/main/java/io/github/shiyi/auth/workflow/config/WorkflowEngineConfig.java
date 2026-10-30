@@ -34,7 +34,7 @@ public class WorkflowEngineConfig {
     ProcessEngine processEngine(DataSource dataSource,
                                 PlatformTransactionManager transactionManager,
                                 org.springframework.context.ApplicationContext applicationContext,
-                                ObjectProvider<io.github.shiyi.auth.user.notify.NotificationService> notifications) {
+                                ObjectProvider<io.github.shiyi.auth.workflow.notify.WorkflowNotifier> notifier) {
         SpringProcessEngineConfiguration cfg = new SpringProcessEngineConfiguration();
         cfg.setDataSource(dataSource);
         cfg.setTransactionManager(transactionManager);
@@ -45,7 +45,7 @@ public class WorkflowEngineConfig {
         // ApplicationContextAware callback never fires — do it ourselves or
         // BPMN expressions like ${aiReviewDelegate} cannot see Spring beans.
         cfg.setApplicationContext(applicationContext);
-        notifications.ifAvailable(n -> cfg.setEventListeners(java.util.List.of(
+        notifier.ifAvailable(n -> cfg.setEventListeners(java.util.List.of(
                 new io.github.shiyi.auth.workflow.notify.TaskCreatedNotifier(n))));
         return cfg.buildProcessEngine();
     }

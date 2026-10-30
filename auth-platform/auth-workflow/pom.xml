@@ -16,10 +16,32 @@
     <description>Workflow module: embedded Flowable 8 engine, approval flows bound to platform users/roles</description>
 
     <dependencies>
-        <!-- 复用平台用户/组织/角色域与通知服务 -->
+        <!-- 流程 REST 契约（纯 record，无 Spring/Flowable）：控制器与将来的远程客户端共享同一份定义 -->
         <dependency>
             <groupId>io.github.shiyi</groupId>
-            <artifactId>auth-user</artifactId>
+            <artifactId>auth-workflow-api</artifactId>
+        </dependency>
+
+        <!-- 统一返回体 ApiResult / BizException -->
+        <dependency>
+            <groupId>io.github.shiyi</groupId>
+            <artifactId>auth-common</artifactId>
+        </dependency>
+
+        <!-- 流程表单表 sys_flow_form 的 ORM 映射（原先靠 auth-user 传递引入） -->
+        <dependency>
+            <groupId>com.baomidou</groupId>
+            <artifactId>mybatis-plus-spring-boot4-starter</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.baomidou</groupId>
+            <artifactId>mybatis-plus-jsqlparser</artifactId>
+        </dependency>
+
+        <!-- 当前用户与 @PreAuthorize：只依赖 Spring Security 的身份抽象，不依赖用户域 -->
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-core</artifactId>
         </dependency>
 
         <!-- Flowable 8（Boot 4 基线）：引擎 + Spring 装配 + 流程图生成 -->

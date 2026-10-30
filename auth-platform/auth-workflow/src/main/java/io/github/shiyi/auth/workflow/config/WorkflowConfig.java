@@ -61,14 +61,14 @@ public class WorkflowConfig {
      */
     @org.springframework.context.annotation.Bean(name = "flowSlaScanner")
     Object flowSlaScanner(org.springframework.beans.factory.ObjectProvider<org.flowable.engine.TaskService> tasks,
-                          org.springframework.beans.factory.ObjectProvider<io.github.shiyi.auth.user.notify.NotificationService> notifications,
+                          org.springframework.beans.factory.ObjectProvider<io.github.shiyi.auth.workflow.notify.WorkflowNotifier> notifier,
                           @org.springframework.beans.factory.annotation.Value(
                                   "${auth.flow.sla.enabled:true}") boolean enabled) {
         if (!enabled) {
             return null; // returning null from @Bean = no bean — intentional off switch
         }
         var taskService = tasks.getIfAvailable();
-        var notify = notifications.getIfAvailable();
+        var notify = notifier.getIfAvailable();
         if (taskService == null || notify == null) {
             return null;
         }

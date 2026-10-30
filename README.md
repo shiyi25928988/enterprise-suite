@@ -19,17 +19,25 @@ Enterprise unified authentication platform built on **Spring Authorization Serve
 ```
 enterprise-suite/
 ├── auth-platform/
-│   ├── auth-common/    shared types: ApiResult, ErrorCode, base exceptions
-│   ├── auth-user/      user domain: DTO / service / REST API (SAS-agnostic)
-│   ├── auth-workflow/  workflow: embedded Flowable 8, approval API, AI node
-│   └── auth-server/    executable: SAS 7 wiring + user + workflow assembly
+│   ├── auth-common/       shared types: ApiResult, ErrorCode, base exceptions
+│   ├── auth-user/         user domain: DTO / service / REST API (SAS-agnostic)
+│   ├── auth-workflow-api/ workflow REST contract: plain records, zero deps
+│   ├── auth-workflow/     workflow: embedded Flowable 8, approval API, AI node
+│   └── auth-server/       executable: SAS 7 wiring + user + workflow assembly
 ├── auth-web/           admin console SPA (Vue 3 + Vite)
 ├── bench/              single-file JDK 21 load tools (java bench/X.java)
 └── deploy/             docker-compose: Prometheus + Grafana, pre-provisioned
                         datasource and auth-platform dashboard
 ```
 
-Dependency direction is enforced at compile time: `auth-server → auth-workflow → auth-user → auth-common`, never backwards.
+Dependency direction is enforced at compile time: `auth-server → auth-workflow → auth-workflow-api / auth-common`, never backwards.
+
+`auth-workflow` deliberately does **not** depend on `auth-user`: it publishes
+events through its own `WorkflowNotifier` port (bound to the notification
+channels in `auth-server`'s `WorkflowNotifyConfig`), and its REST payloads live
+in `auth-workflow-api`. That leaves the module liftable into a separate
+deployment without touching a workflow class — see "Splitting the workflow
+service" at the end of this file.
 
 ## Quick start
 
@@ -455,6 +463,35 @@ Flyway migration set in
 `auth-platform/auth-server/src/main/resources/db/migration`; endpoint shapes are
 in the `web` package of each module (`/api/auth/**` for sessions and social
 logins, `/api/v1/**` for the admin surface).
+
+## Splitting the workflow service
+
+The engine is deployed **inside** `auth-server` today, and that is a deliberate
+choice rather than an accident of packaging: one process, one database, one
+transaction for "approve a task and tell the world".
+
+What the split would cost, given the current code:
+
+| Coupling | Today | After a split |
+|---|---|---|
+| Outbound events | `WorkflowNotifier` port → notification channels, in-process | message publish or HTTP call |
+| REST payloads | `auth-workflow-api` records | unchanged (same module, now on both sides) |
+| DataSource | shared with the platform | separate schema; ACT_ tables are engine-managed anyway |
+| Authentication | same server-side session (`JSESSIONID`, or Redis under the `redis` profile) | shared session store, or a JWT resource server |
+| Transactions | `complete()` + audit + notify in one transaction | outbox / compensation needed once user-side side effects appear |
+
+Split when one of these becomes observable, not before:
+
+- the engine has taken the authentication centre down (OOM, connection-pool
+  exhaustion, a bad BPMN deployment causing login 5xx);
+- flow API p99 or error rate correlates with login latency;
+- flow ships on a different cadence than the authentication centre;
+- flow needs its own scaling or its history must be stored/audited separately.
+
+Until then the cheaper mitigations are per-engine resource limits, a BPMN
+validation gate before deploy, and a circuit breaker between the API and the
+engine. The `WorkflowNotifier` port and `auth-workflow-api` exist so that the
+day the split is justified it is an assembly change, not a rewrite.
 
 ## License
 

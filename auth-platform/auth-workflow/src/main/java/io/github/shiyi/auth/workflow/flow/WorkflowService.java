@@ -18,6 +18,11 @@ import org.flowable.task.api.history.HistoricTaskInstance;
 import io.github.shiyi.auth.common.api.ErrorCode;
 import io.github.shiyi.auth.workflow.ai.WorkflowVar;
 import io.github.shiyi.auth.common.exception.BizException;
+import io.github.shiyi.auth.workflow.api.DefInfo;
+import io.github.shiyi.auth.workflow.api.InstanceView;
+import io.github.shiyi.auth.workflow.api.StartResult;
+import io.github.shiyi.auth.workflow.api.TaskDetail;
+import io.github.shiyi.auth.workflow.api.TaskView;
 /**
  * W1/W2: approval-flow core operations on top of the embedded Flowable engine.
  * Identity stays in the platform — assignees are platform usernames, candidate
@@ -51,10 +56,6 @@ public class WorkflowService {
     }
 
     // ---------- definitions ----------
-
-    public record DefInfo(String id, String key, String name, int version,
-                          boolean suspended, String deploymentId) {
-    }
 
     public DefInfo deploy(String name, String bpmnXml) {
         // Flowable only parses resources whose name carries a BPMN suffix —
@@ -92,9 +93,6 @@ public class WorkflowService {
     }
 
     // ---------- starting ----------
-
-    public record StartResult(String processInstanceId, String businessKey) {
-    }
 
     public StartResult start(String processKey, String initiator, String businessKey,
                              Map<String, Object> variables) {
@@ -138,21 +136,6 @@ public class WorkflowService {
     }
 
     // ---------- task views ----------
-
-    /**
-     * @param delegationState "pending" (delegated away, delegatee works on it)
-     *                        / "resolved" (delegatee answered, owner finishes);
-     *                        null for plain tasks
-     * @param dueDate         SLA due date from the BPMN, null when unset
-     * @param progress        countersign progress "done/total", null for
-     *                        single-instance tasks
-     */
-    public record TaskView(String id, String name, String assignee, String owner,
-                           String processInstanceId, String processDefinitionId,
-                           java.time.LocalDateTime createTime, boolean aiReviewed,
-                           String delegationState, java.time.LocalDateTime dueDate,
-                           String progress) {
-    }
 
     public List<TaskView> todo(String username, List<String> roles) {
         List<Task> list = tasks.createTaskQuery()
@@ -361,10 +344,6 @@ public class WorkflowService {
         return t == null ? null : toTaskView(t);
     }
 
-    /** Full detail: task + process variables (form payload, AI suggestion…). */
-    public record TaskDetail(TaskView task, Map<String, Object> variables, List<String> comments) {
-    }
-
     public TaskDetail taskDetail(String taskId, String username, List<String> roles) {
         Task t = requireTask(taskId);
         ensureCanAct(t, username, roles);
@@ -394,11 +373,6 @@ public class WorkflowService {
                                         java.time.ZoneId.systemDefault()),
                         null))
                 .toList();
-    }
-
-    public record InstanceView(String id, String processKey, String processName,
-                               String starter, String businessKey, java.time.LocalDateTime startedAt,
-                               boolean finished, String endState) {
     }
 
     public List<InstanceView> myInstances(String username) {

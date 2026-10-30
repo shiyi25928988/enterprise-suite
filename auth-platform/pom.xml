@@ -20,6 +20,7 @@
     <modules>
         <module>auth-common</module>
         <module>auth-user</module>
+        <module>auth-workflow-api</module>
         <module>auth-workflow</module>
         <module>auth-server</module>
     </modules>
@@ -36,6 +37,7 @@
         <!-- 内部模块版本统一引用 -->
         <auth-common.version>${project.version}</auth-common.version>
         <auth-user.version>${project.version}</auth-user.version>
+        <auth-workflow-api.version>${project.version}</auth-workflow-api.version>
     </properties>
 
     <!-- ============ 依赖版本管理（只锁版本，不引入） ============ -->
@@ -52,6 +54,11 @@
                 <groupId>io.github.shiyi</groupId>
                 <artifactId>auth-user</artifactId>
                 <version>${auth-user.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.shiyi</groupId>
+                <artifactId>auth-workflow-api</artifactId>
+                <version>${auth-workflow-api.version}</version>
             </dependency>
 
             <dependency>

@@ -15,6 +15,10 @@ import org.flowable.engine.history.HistoricProcessInstance;
 import org.flowable.engine.repository.ProcessDefinition;
 
 import io.github.shiyi.auth.workflow.ai.WorkflowVar;
+import io.github.shiyi.auth.workflow.api.DefinitionStats;
+import io.github.shiyi.auth.workflow.api.NodeStats;
+import io.github.shiyi.auth.workflow.api.Overview;
+import io.github.shiyi.auth.workflow.api.TimelineStep;
 
 /**
  * W2: process analytics on top of Flowable history — instance throughput and
@@ -37,10 +41,6 @@ public class FlowAnalyticsService {
     }
 
     // ---------- overview ----------
-
-    public record Overview(long total, long running, long finished, long approved,
-                           long rejected, long avgCycleMs, long tasksDone, long overdueActive) {
-    }
 
     public Overview overview() {
         List<HistoricProcessInstance> all = history.createHistoricProcessInstanceQuery()
@@ -77,11 +77,6 @@ public class FlowAnalyticsService {
 
     // ---------- per definition ----------
 
-    public record DefinitionStats(String processKey, String name, long instances,
-                                  long finished, long approved, long rejected,
-                                  long avgCycleMs) {
-    }
-
     public List<DefinitionStats> definitions() {
         List<HistoricProcessInstance> all = history.createHistoricProcessInstanceQuery()
                 .includeProcessVariables()
@@ -116,10 +111,6 @@ public class FlowAnalyticsService {
     }
 
     // ---------- per node ----------
-
-    public record NodeStats(String activityId, String name, String type, long count,
-                            long avgMs, long minMs, long maxMs) {
-    }
 
     /**
      * Node cycle times for a definition (latest version only — mixing versions
@@ -158,10 +149,6 @@ public class FlowAnalyticsService {
     }
 
     // ---------- instance timeline ----------
-
-    public record TimelineStep(String activityId, String name, String type, String assignee,
-                               LocalDateTime startTime, LocalDateTime endTime, Long durationMs) {
-    }
 
     public List<TimelineStep> timeline(String instanceId) {
         return history.createHistoricActivityInstanceQuery()

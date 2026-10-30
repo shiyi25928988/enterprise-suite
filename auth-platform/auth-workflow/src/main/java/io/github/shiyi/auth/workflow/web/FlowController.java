@@ -22,6 +22,15 @@ import io.github.shiyi.auth.common.exception.BizException;
 import io.github.shiyi.auth.workflow.form.FlowFormEntity;
 import io.github.shiyi.auth.workflow.form.FlowFormService;
 import io.github.shiyi.auth.workflow.flow.WorkflowService;
+import io.github.shiyi.auth.workflow.api.DefInfo;
+import io.github.shiyi.auth.workflow.api.DefinitionStats;
+import io.github.shiyi.auth.workflow.api.InstanceView;
+import io.github.shiyi.auth.workflow.api.NodeStats;
+import io.github.shiyi.auth.workflow.api.Overview;
+import io.github.shiyi.auth.workflow.api.StartResult;
+import io.github.shiyi.auth.workflow.api.TaskDetail;
+import io.github.shiyi.auth.workflow.api.TaskView;
+import io.github.shiyi.auth.workflow.api.TimelineStep;
 
 /**
  * W1: workflow REST surface.
@@ -69,7 +78,7 @@ public class FlowController {
 
     @PostMapping("/deploy")
     @PreAuthorize("hasRole('ADMIN')")
-    public ApiResult<WorkflowService.DefInfo> deploy(@RequestBody DeployRequest req) {
+    public ApiResult<DefInfo> deploy(@RequestBody DeployRequest req) {
         if (req.bpmnXml() == null || req.bpmnXml().isBlank()) {
             throw new BizException(ErrorCode.BAD_REQUEST, "bpmnXml is required");
         }
@@ -83,14 +92,14 @@ public class FlowController {
 
     @GetMapping("/definitions")
     @PreAuthorize("hasRole('ADMIN')")
-    public ApiResult<List<WorkflowService.DefInfo>> definitions() {
+    public ApiResult<List<DefInfo>> definitions() {
         return ApiResult.ok(service().definitions());
     }
 
     /** Anything a logged-in employee may start, with its form name for the picker. */
     @GetMapping("/startable")
     public ApiResult<List<Map<String, Object>>> startable() {
-        List<WorkflowService.DefInfo> defs = service().definitions().stream()
+        List<DefInfo> defs = service().definitions().stream()
                 .filter(d -> !d.suspended())
                 .toList();
         FlowFormService formService = forms.getIfAvailable();
@@ -151,7 +160,7 @@ public class FlowController {
     }
 
     @PostMapping("/instances")
-    public ApiResult<WorkflowService.StartResult> start(@RequestBody StartRequest req,
+    public ApiResult<StartResult> start(@RequestBody StartRequest req,
                                                         Authentication auth) {
         // form validation belongs here: schema constraints are business rules
         Map<String, Object> vars;
@@ -165,7 +174,7 @@ public class FlowController {
     }
 
     @GetMapping("/instances/mine")
-    public ApiResult<List<WorkflowService.InstanceView>> myInstances(Authentication auth) {
+    public ApiResult<List<InstanceView>> myInstances(Authentication auth) {
         return ApiResult.ok(service().myInstances(auth.getName()));
     }
 
@@ -180,22 +189,22 @@ public class FlowController {
     // ---------- tasks ----------
 
     @GetMapping("/todo")
-    public ApiResult<List<WorkflowService.TaskView>> todo(Authentication auth) {
+    public ApiResult<List<TaskView>> todo(Authentication auth) {
         return ApiResult.ok(service().todo(auth.getName(), roles(auth)));
     }
 
     @GetMapping("/done")
-    public ApiResult<List<WorkflowService.TaskView>> done(Authentication auth) {
+    public ApiResult<List<TaskView>> done(Authentication auth) {
         return ApiResult.ok(service().done(auth.getName()));
     }
 
     @GetMapping("/tasks/{id}")
-    public ApiResult<WorkflowService.TaskDetail> task(@PathVariable String id, Authentication auth) {
+    public ApiResult<TaskDetail> task(@PathVariable String id, Authentication auth) {
         return ApiResult.ok(service().taskDetail(id, auth.getName(), roles(auth)));
     }
 
     @PostMapping("/tasks/{id}/claim")
-    public ApiResult<WorkflowService.TaskView> claim(@PathVariable String id, Authentication auth) {
+    public ApiResult<TaskView> claim(@PathVariable String id, Authentication auth) {
         return ApiResult.ok(service().claim(id, auth.getName(), roles(auth)));
     }
 
@@ -203,7 +212,7 @@ public class FlowController {
     }
 
     @PostMapping("/tasks/{id}/complete")
-    public ApiResult<WorkflowService.TaskView> complete(@PathVariable String id,
+    public ApiResult<TaskView> complete(@PathVariable String id,
                                                         @RequestBody CompleteRequest req,
                                                         Authentication auth) {
         return ApiResult.ok(service().complete(id, auth.getName(), roles(auth),
@@ -217,21 +226,21 @@ public class FlowController {
     }
 
     @PostMapping("/tasks/{id}/delegate")
-    public ApiResult<WorkflowService.TaskView> delegate(@PathVariable String id,
+    public ApiResult<TaskView> delegate(@PathVariable String id,
                                                         @RequestBody TaskActionRequest req,
                                                         Authentication auth) {
         return ApiResult.ok(service().delegate(id, auth.getName(), roles(auth), req.user()));
     }
 
     @PostMapping("/tasks/{id}/transfer")
-    public ApiResult<WorkflowService.TaskView> transfer(@PathVariable String id,
+    public ApiResult<TaskView> transfer(@PathVariable String id,
                                                         @RequestBody TaskActionRequest req,
                                                         Authentication auth) {
         return ApiResult.ok(service().transfer(id, auth.getName(), roles(auth), req.user()));
     }
 
     @PostMapping("/tasks/{id}/unclaim")
-    public ApiResult<WorkflowService.TaskView> unclaim(@PathVariable String id,
+    public ApiResult<TaskView> unclaim(@PathVariable String id,
                                                        Authentication auth) {
         return ApiResult.ok(service().unclaim(id, auth.getName(), roles(auth)));
     }
@@ -240,27 +249,27 @@ public class FlowController {
 
     @GetMapping("/analytics/overview")
     @PreAuthorize("hasRole('ADMIN')")
-    public ApiResult<io.github.shiyi.auth.workflow.analytics.FlowAnalyticsService.Overview>
+    public ApiResult<Overview>
             analyticsOverview() {
         return ApiResult.ok(analytics().overview());
     }
 
     @GetMapping("/analytics/definitions")
     @PreAuthorize("hasRole('ADMIN')")
-    public ApiResult<List<io.github.shiyi.auth.workflow.analytics.FlowAnalyticsService.DefinitionStats>>
+    public ApiResult<List<DefinitionStats>>
             analyticsDefinitions() {
         return ApiResult.ok(analytics().definitions());
     }
 
     @GetMapping("/analytics/nodes/{processKey}")
     @PreAuthorize("hasRole('ADMIN')")
-    public ApiResult<List<io.github.shiyi.auth.workflow.analytics.FlowAnalyticsService.NodeStats>>
+    public ApiResult<List<NodeStats>>
             analyticsNodes(@PathVariable String processKey) {
         return ApiResult.ok(analytics().nodes(processKey));
     }
 
     @GetMapping("/instances/{id}/timeline")
-    public ApiResult<List<io.github.shiyi.auth.workflow.analytics.FlowAnalyticsService.TimelineStep>>
+    public ApiResult<List<TimelineStep>>
             timeline(@PathVariable String id) {
         return ApiResult.ok(analytics().timeline(id));
     }
