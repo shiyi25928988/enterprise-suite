@@ -29,7 +29,6 @@ import org.springframework.security.web.csrf.CsrfTokenRepository;
 import org.springframework.security.web.util.matcher.MediaTypeRequestMatcher;
 
 import io.github.shiyi.auth.common.api.ApiResult;
-import io.github.shiyi.auth.common.api.ErrorCode;
 import io.github.shiyi.auth.server.auth.JsonResponses;
 import io.github.shiyi.auth.server.auth.JsonUsernamePasswordFilter;
 import io.github.shiyi.auth.server.auth.LoginFailureHandler;
@@ -43,12 +42,18 @@ import io.github.shiyi.auth.server.auth.SpaCsrfTokenRequestHandler;
  *
  * <ol>
  *   <li>{@code @Order(1)} SAS protocol endpoints (/oauth2/*, /.well-known/*, /userinfo, /connect/*)</li>
- *   <li>{@code @Order(2)} business API (/api/**) — session-based, CSRF cookie mode, JSON errors</li>
- *   <li>{@code @Order(3)} login / consent pages (default generated pages until the login SPA lands)</li>
+ *   <li>{@code @Order(2)} workflow API (/api/v1/flow/**) — own role table, own
+ *       split seam; see {@link WorkflowApiSecurityConfig}</li>
+ *   <li>{@code @Order(3)} remaining business API (/api/**) — session-based, CSRF cookie mode, JSON errors</li>
+ *   <li>{@code @Order(4)} login / consent pages (default generated pages until the login SPA lands)</li>
  * </ol>
  *
- * <p>WARNING: chain 1 must be restricted by {@code getEndpointsMatcher()},
+ * <p>WARNING 1: chain 1 must be restricted by {@code getEndpointsMatcher()},
  * otherwise it hijacks business endpoints.</p>
+ *
+ * <p>WARNING 2: chain 2 must stay ahead of chain 3 — the {@code /api/**}
+ * matcher is broader, so swapping the two orders would silently turn the
+ * workflow ADMIN rules into "authenticated only".</p>
  */
 @Configuration
 @EnableWebSecurity
@@ -139,9 +144,14 @@ public class SecurityConfig {
         return http.build();
     }
 
-    /** ② Business API (/api/**): session auth + SPA-style CSRF + JSON 401 + JSON logout. */
+    /**
+     * ③ Business API (/api/**): session auth + SPA-style CSRF + JSON 401/403 + JSON logout.
+     *
+     * <p>NOTE: {@code /api/v1/flow/**} is claimed earlier by
+     * {@link WorkflowApiSecurityConfig} — it never reaches this chain.</p>
+     */
     @Bean
-    @Order(2)
+    @Order(3)
     SecurityFilterChain apiSecurityFilterChain(HttpSecurity http,
                                                ObjectMapper objectMapper,
                                                AuthenticationManager authenticationManager,
@@ -159,9 +169,9 @@ public class SecurityConfig {
             .csrf(csrf -> csrf
                     .csrfTokenRepository(csrfTokenRepository)
                     .csrfTokenRequestHandler(new SpaCsrfTokenRequestHandler()))
-            .exceptionHandling(e -> e.authenticationEntryPoint((request, response, authException) ->
-                    JsonResponses.write(response, objectMapper, HttpStatus.UNAUTHORIZED,
-                            ApiResult.fail(ErrorCode.UNAUTHENTICATED))))
+            .exceptionHandling(e -> e
+                    .authenticationEntryPoint(JsonResponses.unauthenticated(objectMapper))
+                    .accessDeniedHandler(JsonResponses.forbidden(objectMapper)))
             .logout(logout -> logout
                     .logoutUrl("/api/auth/logout")
                     .logoutSuccessHandler(jsonLogoutSuccessHandler(objectMapper)))
@@ -173,9 +183,9 @@ public class SecurityConfig {
         return http.build();
     }
 
-    /** ③ SPA shell: /login, /403 and static assets are public; everything else needs a session. */
+    /** ④ SPA shell: /login, /403 and static assets are public; everything else needs a session. */
     @Bean
-    @Order(3)
+    @Order(4)
     SecurityFilterChain defaultSecurityFilterChain(HttpSecurity http) throws Exception {
         http.authorizeHttpRequests(authorize -> authorize
                 .requestMatchers("/login", "/index.html", "/error", "/assets/**", "/403",

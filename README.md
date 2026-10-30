@@ -303,6 +303,23 @@ complete), transfer, `task.overdue` webhook delivered with due date and
 overdue millis, analytics endpoints populated correctly, timeline shows every
 activity including both countersign instances.
 
+### Workflow API gets its own security chain (2026-10-30)
+
+`/api/v1/flow/**` used to ride the generic `/api/**` chain, where "authenticated"
+was the only rule and the ADMIN checks lived on `@PreAuthorize` alone. It now
+has a dedicated chain (`WorkflowApiSecurityConfig`, `@Order(2)`) that states the
+role table at URL level, keeps `@PreAuthorize` as the second line of defence,
+and marks the exact block to replace when the service is split out (session →
+JWT). Filter-level denials now answer the same envelope as controller-level ones,
+so a 403 is always `40300` instead of an empty body.
+
+Verified against real MySQL: anonymous → 401/`40100`; `secprobe`
+(`WAREHOUSE` role) → 200 on todo/done/startable/instances-mine/forms/{key},
+403/`40300` on definitions, forms-list, analytics and deploy, 401 on nothing;
+admin → 200 everywhere; `POST /deploy` without the CSRF header → 403 while the
+same call with it reaches the controller (400 on the deliberately invalid XML).
+19/19 assertions.
+
 ### M5c: DingTalk scan login, badge QR, per-device token policy, anomaly detection (2026-10-30)
 
 - **DingTalk scan login** (`auth.dingtalk.*`, off by default):
@@ -405,6 +422,11 @@ servers, so it runs in a few seconds and can gate every commit. It pins the
 invariants that are expensive to rediscover by hand — the rules that look
 correct until a specific input proves otherwise.
 
+One exception: `WorkflowApiSecurityTest` boots a *minimal* context (the flow
+chain, the real `FlowController`, no persistence) because the rule it protects —
+which URL needs which role — is decided by a filter chain, and a chain can only
+be tested by running a request through it.
+
 | Test | Invariant it protects |
 |---|---|
 | `AnomalyDetectorTest` | `new_location` fires only against a non-empty history and only for an unseen /24; `brute_force` fires exactly at the threshold, so one burst is one event; a failing audit store never escapes into the login path |
@@ -413,6 +435,7 @@ correct until a specific input proves otherwise.
 | `LdapDirectoryTest` | DN normalisation is case/whitespace-insensitive; the parent split honours RFC 4514 escapes, so `CN=Smith\, John` does not become its own org root |
 | `SlaClockTest` | hour/minute offsets are converted, and negative values land in the past (how overdue tasks are produced on demand) |
 | `TokenTtlTest` | `null` keeps a stored TTL, non-positive clears it, and a cleared column still resolves to the 30/10-minute defaults — the pair that makes a custom TTL reversible |
+| `WorkflowApiSecurityTest` | `/api/v1/flow/**` keeps its own chain: anonymous → 401/`40100`, employee → 200 on "my work" but 403/`40300` on deploy/definitions/forms-list/analytics, `GET /forms/{key}` stays open to employees, CSRF still applies, and the flow chain stays ordered ahead of `/api/**` |
 
 End-to-end behaviour (real MySQL + Redis, live HTTP) is covered by the verified
 runs recorded milestone by milestone above; those exercise the wiring this
@@ -478,6 +501,24 @@ What the split would cost, given the current code:
 | REST payloads | `auth-workflow-api` records | unchanged (same module, now on both sides) |
 | DataSource | shared with the platform | separate schema; ACT_ tables are engine-managed anyway |
 | Authentication | same server-side session (`JSESSIONID`, or Redis under the `redis` profile) | shared session store, or a JWT resource server |
+
+The authorization half of the last row is already isolated: `/api/v1/flow/**`
+runs through its own `SecurityFilterChain`
+(`WorkflowApiSecurityConfig`), and the only block that assumes "same process"
+is the one commented `SPLIT SEAM` — session + CSRF + the initial-password gate.
+A standalone service replaces that block with a JWT resource server and keeps
+the rule table above it untouched:
+
+| Endpoint | Who |
+|---|---|
+| `POST /deploy`, `GET /definitions`, `GET /forms`, `PUT /forms/{key}`, `GET /analytics/**` | `ROLE_ADMIN` |
+| `GET /forms/{key}` | any signed-in employee (the form you have to fill in) |
+| start / todo / done / tasks / timeline | any signed-in employee |
+
+Chain order is part of the contract: the flow chain sits at `@Order(2)`, ahead
+of the generic `/api/**` chain at `@Order(3)`. Flip them and every ADMIN rule
+silently degrades to "authenticated" — which is why the test reads the `@Order`
+values back off the beans instead of trusting the comments.
 | Transactions | `complete()` + audit + notify in one transaction | outbox / compensation needed once user-side side effects appear |
 
 Split when one of these becomes observable, not before:

@@ -96,6 +96,16 @@
             <groupId>org.apache.commons</groupId>
             <artifactId>commons-pool2</artifactId>
         </dependency>
+
+        <!-- Boot 4 split the web slice out of spring-boot-test-autoconfigure:
+             @AutoConfigureMockMvc (and the security filter-chain wiring for
+             MockMvc) now lives in this starter. Needed by
+             WorkflowApiSecurityTest. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webmvc-test</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
