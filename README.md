@@ -259,7 +259,7 @@ on first boot.
 - **Frontend**: 我的申请 (dynamic form + my instances), 审批中心 (todo/done,
   AI badge, comments), 流程管理 (bpmn-js designer with XML import/export,
   "载入设计器" opens a deployed process, node name + candidate-roles editing,
-  form schema editor).
+  gateway branch conditions with a default-flow switch, form schema editor).
 - **Open a deployed process in the designer** (`GET /definitions/{key}/xml`,
   ADMIN): returns the BPMN the engine actually deployed — the resource, not a
   re-serialisation — plus `version` and a `renderable` flag. `renderable` is
@@ -353,6 +353,55 @@ flow-by-flow, `renderable=true` for v3, `renderable=false` for the v1
 and 13/13 browser assertions (six nodes rendered, deploy target follows the
 key, no prompt on a clean canvas, prompt after a real drag, canvas untouched
 when the target has no diagram).
+
+### Branch conditions in the designer (2026-10-30)
+
+An exclusive gateway decides by evaluating its outgoing flows in document order
+and taking the first truthy one. That rule lived only in the XML: the designer
+offered a gateway node with no way to write the conditions, so every real
+branch meant hand-editing BPMN — where the failure modes are silent.
+
+- Selecting a gateway lists one card per outgoing flow: branch name, condition,
+  and a 默认 radio for the fallback. The flows are highlighted on the canvas at
+  the same time, because a 2px-wide line is not a reasonable click target.
+- Selecting a sequence flow directly edits its own condition, for the case
+  where the admin is already looking at the line.
+- Marking a flow as the default **clears its condition**: BPMN forbids one on a
+  default flow and Flowable rejects such a deployment outright (measured: 400
+  on deploy, not a runtime failure).
+- Deploy runs a lint first. Three rules block, two warn, and every one of them
+  was measured against Flowable 8 rather than assumed — the intuitive guesses
+  are wrong in both directions:
+
+  | Diagram | What actually happens |
+  |---|---|
+  | `${amount > 1000}` + default flow | condition true → branch; false → default. The shape the designer produces. |
+  | `amount > 1000` (no `${}`) | instance **fails to start** (HTTP 500). The engine evaluates the bare text as an expression; it is *not* a fixed truthy value. |
+  | a non-default flow with no condition | it is selected because "no condition" reads as true, so every branch ordered after it is dead code |
+  | no branch matches, no default flow | instance fails to start — "no outgoing sequence flow could be selected" |
+  | default flow that still carries a condition | deployment rejected (400) |
+
+  All five parse and deploy cleanly apart from the last, which is why they are
+  worth stopping at design time: otherwise the failure lands on the employee
+  submitting the form.
+- The toolbar shows the key taken from `<process id="…">`. The deployment name
+  never decided it, and after a deploy the notice reports the key the engine
+  actually published (`已部署：gw-demo v3`), so "I renamed it and now there are
+  two processes" cannot happen quietly.
+
+Verified: 27/27 browser assertions on the built jar (branch cards per outgoing
+flow, condition and name reaching the BPMN, all three blocking rules stopping
+the request before it leaves the browser, default flow losing its condition,
+deployed source carrying `default="f3"`, conditions read back when the process
+is reloaded) and 6/6 runtime assertions — two instances of one definition
+(`gw-demo:5:35012`), `amount=2000` → 总监审批, `amount=100` → 主管审批.
+
+Two traps worth remembering: `businessObject.outgoing` is empty unless the XML
+spells out redundant `<outgoing>` children, so the branch list is read from the
+diagram element's connections instead; and a *named* gateway gets an external
+label element that shares the same `businessObject`, which made the lint report
+a phantom gateway with no outgoing flows until it filtered on the diagram
+element type.
 
 ### M5c: DingTalk scan login, badge QR, per-device token policy, anomaly detection (2026-10-30)
 

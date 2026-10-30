@@ -97,6 +97,8 @@ const error = ref('')
 const notice = ref('')
 
 const deployName = ref('my-approval')
+/** Process key of what is on the canvas — the id Flowable deploys under. */
+const processKey = ref('')
 const xmlText = ref('')
 const showXml = ref(false)
 
@@ -173,6 +175,7 @@ async function importXml() {
   try {
     await modeler.importXML(xmlText.value || STARTER_XML)
     modeler.get('canvas').zoom('fit-viewport')
+    refreshProcessKey()
     notice.value = 'XML 已导入画布'
   } catch (e) {
     const msg = e?.message || String(e)
@@ -191,10 +194,24 @@ async function exportXml() {
 async function deploy() {
   error.value = ''
   notice.value = ''
+  // Gate before the round trip: these are the failures the engine would only
+  // report at runtime, on somebody else's instance.
+  const { blocking, warnings } = lintBranches()
+  if (blocking.length) {
+    error.value = `未部署：${blocking.join('；')}`
+    return
+  }
+  if (warnings.length && !window.confirm(`部署前检查发现 ${warnings.length} 条提示：\n\n${warnings.join('\n')}\n\n仍然部署？`)) {
+    return
+  }
   try {
     const { xml } = await modeler.saveXML({ format: true })
-    await deployProcess(deployName.value, xml)
-    notice.value = `已部署：${deployName.value}`
+    // The deployment name is just a label on the deployment; Flowable takes the
+    // process key from <process id="…"> inside the XML. Echoing the key back is
+    // the only way an admin can see which process they actually published.
+    const info = await deployProcess(deployName.value, xml)
+    deployName.value = info.key
+    notice.value = `已部署：${info.key} v${info.version}`
     await load()
   } catch (e) {
     error.value = e.message
@@ -248,6 +265,16 @@ async function openDefinition(d) {
 
 function fitViewport() {
   modeler?.get('canvas').zoom('fit-viewport')
+}
+
+/**
+ * Flowable keys a deployment by <process id="…">, not by the deployment name.
+ * Surfacing the key makes "I renamed the deployment, why is there a second
+ * process now" impossible to walk into.
+ */
+function refreshProcessKey() {
+  const root = modeler?.get('canvas').getRootElement()
+  processKey.value = root?.businessObject?.id || ''
 }
 
 /**
@@ -398,19 +425,92 @@ function onKeydown(evt) {
 
 // ---- selection / properties --------------------------------------------
 
+const EXCLUSIVE_GATEWAY = 'bpmn:ExclusiveGateway'
+
+/**
+ * Branch conditions live on the sequence flow, not on the gateway: an
+ * exclusive gateway only decides by evaluating each outgoing flow's
+ * conditionExpression in document order and taking the first truthy one.
+ * That is why selecting a gateway has to surface its whole branch list —
+ * editing it node-by-node would mean clicking a 2px-wide line.
+ *
+ * The list comes from the diagram element's own outgoing connections, not from
+ * businessObject.outgoing: bpmn-moddle only fills that reference when the XML
+ * spells out redundant <outgoing> children, while sourceRef/targetRef alone is
+ * perfectly valid BPMN — and is what every hand-written file contains.
+ */
+function branchesOf(element) {
+  const bo = element.businessObject || {}
+  const defaultId = bo.default?.id
+  return (element.outgoing || [])
+    .filter((connection) => connection.type === 'bpmn:SequenceFlow')
+    .map((connection) => {
+      const flow = connection.businessObject
+      return {
+        id: connection.id,
+        name: flow.name || '',
+        target: connection.target?.businessObject?.name || flow.targetRef?.id || '—',
+        condition: flow.conditionExpression?.body || '',
+        isDefault: connection.id === defaultId,
+      }
+    })
+}
+
 function describe(element) {
   const bo = element.businessObject || {}
+  const type = bo.$type || ''
   return {
     id: element.id,
-    type: bo.$type,
+    type,
     name: bo.name || '',
     candidateGroups: bo.$attrs?.['flowable:candidateGroups'] || '',
     countersign: !!bo.loopCharacteristics,
+    isFlow: type === 'bpmn:SequenceFlow',
+    isGateway: type === EXCLUSIVE_GATEWAY,
+    condition: bo.conditionExpression?.body || '',
+    branches: type === EXCLUSIVE_GATEWAY ? branchesOf(element) : [],
   }
 }
 
 function remember(element) {
   selected.value = describe(element)
+  highlightBranches(element)
+}
+
+/**
+ * Marks every outgoing flow of the selected gateway, so "the two lines you
+ * have to configure" are visible without hunting for them.
+ */
+let markedFlows = []
+function highlightBranches(element) {
+  const canvasApi = modeler?.get('canvas')
+  const registry = modeler?.get('elementRegistry')
+  if (!canvasApi || !registry) return
+  markedFlows.forEach((id) => {
+    if (registry.get(id)) canvasApi.removeMarker(id, 'flow-branch')
+  })
+  markedFlows = []
+  if (!element || element.businessObject?.$type !== EXCLUSIVE_GATEWAY) return
+  ;(element.outgoing || []).forEach((connection) => {
+    if (registry.get(connection.id)) {
+      canvasApi.addMarker(connection.id, 'flow-branch')
+      markedFlows.push(connection.id)
+    }
+  })
+}
+
+/**
+ * Redraws the branch list only when a branch was added or removed. Rebuilding
+ * on every command would replace the selected object and steal focus from the
+ * input the admin is typing in.
+ */
+function syncBranchList() {
+  const current = selected.value
+  if (!current?.isGateway) return
+  const element = modeler?.get('elementRegistry').get(current.id)
+  if (!element) return
+  const ids = (element.outgoing || []).map((connection) => connection.id).join(',')
+  if (ids !== current.branches.map((branch) => branch.id).join(',')) remember(element)
 }
 
 function currentElement() {
@@ -441,11 +541,139 @@ function applyCountersign() {
   remember(element)
 }
 
+// ---- branch conditions --------------------------------------------------
+
+function flowById(id) {
+  return modeler?.get('elementRegistry').get(id) || null
+}
+
+function writeCondition(flowId, raw) {
+  const flow = flowById(flowId)
+  if (!flow) return
+  const body = (raw || '').trim()
+  modeler.get('modeling').updateProperties(flow, {
+    conditionExpression: body
+      ? modeler.get('moddle').create('bpmn:FormalExpression', { body })
+      : undefined,
+  })
+}
+
+function applyFlowName(flowId, name) {
+  const flow = flowById(flowId)
+  if (flow) modeler.get('modeling').updateProperties(flow, { name })
+}
+
+/** Condition edited from the gateway's branch list. */
+function applyBranchCondition(branch) {
+  writeCondition(branch.id, branch.condition)
+}
+
+/** Condition edited by selecting the sequence flow itself. */
+function applySelectedCondition() {
+  writeCondition(selected.value.id, selected.value.condition)
+}
+
+/**
+ * Marking a flow as the default branch. BPMN forbids a condition on the
+ * default flow, and Flowable silently ignores one, so any condition left on it
+ * would read as "this branch is conditional" while it actually is the
+ * fallback — clear it instead of leaving a lie on the diagram.
+ */
+function applyDefaultFlow(branch) {
+  const gateway = currentElement()
+  const flow = flowById(branch.id)
+  if (!gateway || !flow) return
+  const modeling = modeler.get('modeling')
+  modeling.updateProperties(gateway, { default: flow.businessObject })
+  modeling.updateProperties(flow, { conditionExpression: undefined })
+  remember(gateway)
+  notice.value = `默认分支已设为「${branch.target}」`
+}
+
+function clearDefaultFlow() {
+  const gateway = currentElement()
+  if (!gateway) return
+  modeler.get('modeling').updateProperties(gateway, { default: undefined })
+  remember(gateway)
+}
+
+/**
+ * Deploy-time lint. Every rule here was measured against Flowable 8 rather than
+ * reasoned about, because the obvious guesses are wrong:
+ *
+ *   ${amount > 1000} + default  → condition true takes the branch, false falls
+ *                                 through to the default flow
+ *   amount > 1000 (no ${})      → the instance fails to start (HTTP 500): the
+ *                                 engine evaluates the bare text as an
+ *                                 expression, not as a fixed truthy value
+ *   draft that omits ${}        → same failure, discovered by the employee
+ *                                 submitting the form, not by the admin
+ *   a non-default unconditional → it is selected because "no condition" reads
+ *                                 as true, so any branch ordered after it is
+ *                                 dead code
+ *   no branch matches, no       → the instance fails to start: "no outgoing
+ *   default                       sequence flow could be selected"
+ *   default flow with a         → the deployment is rejected outright
+ *   condition
+ *
+ * All of them parse and deploy cleanly, which is exactly why they are worth
+ * blocking at design time.
+ */
+function lintBranches() {
+  const registry = modeler.get('elementRegistry')
+  const blocking = []
+  const warnings = []
+  // filter on the diagram element type, not on businessObject.$type: a named
+  // gateway gets an external label element that shares the very same
+  // businessObject and has no outgoing connections of its own
+  registry.filter((el) => el.type === EXCLUSIVE_GATEWAY && !el.labelTarget).forEach((gw) => {
+    const bo = gw.businessObject
+    const label = bo.name || bo.id
+    const flows = (gw.outgoing || []).filter((c) => c.type === 'bpmn:SequenceFlow')
+    if (!flows.length) {
+      blocking.push(`网关「${label}」没有出向分支`)
+      return
+    }
+    if (flows.length === 1) {
+      warnings.push(`网关「${label}」只有一条出向分支，条件不成立时流程会卡在这里`)
+    }
+    const defaultId = bo.default?.id
+    flows.forEach((connection) => {
+      const flow = connection.businessObject
+      const body = (flow.conditionExpression?.body || '').trim()
+      const to = connection.target?.businessObject?.name || flow.targetRef?.id
+      if (connection.id === defaultId) {
+        if (body) {
+          blocking.push(`网关「${label}」的默认分支「${to}」不能再带条件，Flowable 会拒绝部署`)
+        }
+        return
+      }
+      if (!body) {
+        blocking.push(`网关「${label}」→「${to}」没有条件：无条件的出向流会被直接走通，`
+          + '排在它后面的分支永远到不了（要兜底请把它设为默认分支）')
+      } else if (!/[#$]\{/.test(body)) {
+        blocking.push(`网关「${label}」→「${to}」的条件 ${body} 不是表达式，`
+          + '请写成 ${…}；否则流程走到网关时会启动失败')
+      }
+    })
+    if (flows.length > 1 && !defaultId) {
+      warnings.push(`网关「${label}」没有默认分支，所有条件都不成立时流程会在网关处失败`)
+    }
+  })
+  return { blocking, warnings }
+}
+
 const fmtTime = (iso) => (iso ? new Date(iso).toLocaleString() : '—')
 
 onMounted(async () => {
   modeler = new BpmnModeler({ container: canvas.value })
-  modeler.on('element.click', (evt) => remember(evt.element))
+  // clicking a node's label must edit the node, not the label element
+  // (labels share the businessObject but have no connections and no bounds)
+  modeler.on('element.click', (evt) => remember(evt.element.labelTarget || evt.element))
+  modeler.on('commandStack.changed', () => {
+    syncBranchList()
+    refreshProcessKey()
+  })
   // Any container resize (fullscreen toggle, window resize, XML panel opening)
   // must reach bpmn-js, otherwise it draws against a stale viewport size.
   canvasObserver = new ResizeObserver(() => modeler?.get('canvas').resized())
@@ -481,14 +709,17 @@ onBeforeUnmount(() => {
     <div class="designer-shell" :class="{ fullscreen }">
       <div class="designer-head">
         <h3 style="margin: 0;">流程设计器</h3>
-        <code class="head-key">{{ deployName || 'my-approval' }}</code>
+        <code class="head-key">{{ processKey || '—' }}</code>
         <button class="mini ghost" style="width: auto; margin: 0 0 0 auto;" @click="toggleFullscreen">
           退出全屏（Esc）
         </button>
       </div>
 
       <div class="designer-bar">
-        <input v-model="deployName" style="width: 200px;" placeholder="部署名称" />
+        <input v-model="deployName" style="width: 200px;" placeholder="部署包名称" />
+        <code class="key-chip" title="流程 key 取自 XML 里的 process id，部署包名称不决定它">
+          key: {{ processKey || '—' }}
+        </code>
         <button class="mini" style="width: auto;" @click="newDiagram">新建</button>
         <button class="mini" style="width: auto;" @click="exportXml">导出 XML</button>
         <button class="mini" style="width: auto;" @click="showXml = !showXml">
@@ -564,6 +795,65 @@ onBeforeUnmount(() => {
                 <code>${user}</code>；任一实例驳回即以 <code>csRejected</code> 提前结束。
               </p>
             </template>
+
+            <template v-if="selected.isFlow">
+              <label class="field">
+                <span>条件表达式</span>
+                <input
+                  v-model="selected.condition"
+                  placeholder="${approved == true}"
+                  @change="applySelectedCondition"
+                />
+              </label>
+              <p class="muted small">
+                走到这条分支前求值。必须写成 <code>${…}</code>：裸写文本时 Flowable 求值会失败，
+                流程在网关处就起不来。
+              </p>
+            </template>
+
+            <template v-if="selected.isGateway">
+              <p class="muted small">
+                排他网关按顺序求值每条出向分支，取第一个为真的；都不成立时走<b>默认分支</b>。
+              </p>
+              <div v-for="b in selected.branches" :key="b.id" class="branch">
+                <div class="branch-head">
+                  <input
+                    v-model="b.name"
+                    class="branch-name"
+                    placeholder="分支名称（通过 / 驳回）"
+                    @change="applyFlowName(b.id, b.name)"
+                  />
+                  <label class="branch-default" :title="`把「${b.target}」设为默认分支`">
+                    <input
+                      type="radio"
+                      name="defaultBranch"
+                      :checked="b.isDefault"
+                      @change="applyDefaultFlow(b)"
+                    />
+                    <span>默认</span>
+                  </label>
+                </div>
+                <input
+                  v-model="b.condition"
+                  :disabled="b.isDefault"
+                  class="branch-cond"
+                  :placeholder="b.isDefault ? '默认分支不参与条件判定' : '${approved == true}'"
+                  @change="applyBranchCondition(b)"
+                />
+                <p class="branch-target">→ {{ b.target }}</p>
+              </div>
+              <p v-if="!selected.branches.length" class="muted small">
+                这个网关还没有出向分支：从网关边缘拖出连线连到下一个节点。
+              </p>
+              <button
+                v-if="selected.branches.some((b) => b.isDefault)"
+                class="mini ghost"
+                style="width: auto;"
+                @click="clearDefaultFlow"
+              >
+                取消默认分支
+              </button>
+            </template>
           </template>
           <p v-else class="muted">点击画布中的节点编辑属性</p>
 
@@ -623,6 +913,14 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .designer-bar { display: flex; gap: 8px; align-items: center; margin: 12px 0; flex-wrap: wrap; }
+.key-chip {
+  font-size: 12px;
+  color: var(--muted);
+  background: #eef2f7;
+  border-radius: 4px;
+  padding: 2px 6px;
+  white-space: nowrap;
+}
 .designer-grid {
   display: grid;
   grid-template-columns: 140px minmax(0, 1fr) 300px;
@@ -780,4 +1078,39 @@ onBeforeUnmount(() => {
 .check { display: flex; align-items: center; gap: 8px; margin: 4px 0 8px; font-size: 13px; color: var(--text); }
 .check input { width: auto; margin: 0; }
 .small { font-size: 12px; }
+
+/* ---- branch conditions -------------------------------------------------
+   Each outgoing flow of the selected gateway gets a card; the flows
+   themselves are marked on the canvas (see highlightBranches). */
+.branch {
+  margin-bottom: 8px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+}
+.branch-head { display: flex; align-items: center; gap: 6px; }
+.branch-head .branch-name { flex: 1; min-width: 0; }
+.branch-default {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.branch-default input { width: auto; margin: 0; }
+.branch-cond {
+  width: 100%;
+  margin-top: 6px;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 12px;
+}
+.branch-cond:disabled { background: #f3f4f6; color: var(--muted); }
+.branch-target { margin: 4px 0 0; font-size: 11px; color: var(--muted); }
+.bpmn-canvas :deep(.flow-branch .djs-visual > path) {
+  stroke: #d97706;
+  stroke-width: 2.5px;
+}
 </style>
