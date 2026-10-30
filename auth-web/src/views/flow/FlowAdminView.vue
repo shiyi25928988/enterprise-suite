@@ -111,8 +111,13 @@ const drag = ref(null)      // { node, x, y, moved }
 const armed = ref(null)     // node picked by a click, waiting for a canvas click
 const overCanvas = ref(false)
 const fullscreen = ref(false)
+/** id of the just-created branch, flashed + focused until the timer clears it */
+const focusBranchId = ref(null)
 let modeler = null
 let canvasObserver = null
+let focusTimer = null
+/** suppresses branch-focus detection while an import replays the diagram */
+let importing = false
 
 const hint = computed(() => {
   if (drag.value?.moved) return '松开鼠标放置节点'
@@ -172,6 +177,10 @@ async function saveFormSchema() {
 async function importXml() {
   error.value = ''
   notice.value = ''
+  // Import replays the whole diagram through the command stack, which would
+  // otherwise look like "a branch was just added" to syncBranchList and steal
+  // focus into a stale panel — gated off while an import is in flight.
+  importing = true
   try {
     await modeler.importXML(xmlText.value || STARTER_XML)
     modeler.get('canvas').zoom('fit-viewport')
@@ -182,6 +191,8 @@ async function importXml() {
     error.value = /no diagram to display/i.test(msg)
       ? '导入失败：这份 XML 只有语义定义，缺少 <bpmndi:BPMNDiagram> 图形信息，画布无法显示'
       : `导入失败：${msg}`
+  } finally {
+    importing = false
   }
 }
 
@@ -503,6 +514,11 @@ function highlightBranches(element) {
  * Redraws the branch list only when a branch was added or removed. Rebuilding
  * on every command would replace the selected object and steal focus from the
  * input the admin is typing in.
+ *
+ * A newly added branch (native edge-drag, or the "new branch" button) also
+ * grabs focus into its name field: a fresh sequence flow is unnamed and
+ * unconditional, which deploy lint rejects — so the panel walks the admin
+ * straight into fixing it instead of leaving a red line for later.
  */
 function syncBranchList() {
   const current = selected.value
@@ -510,7 +526,26 @@ function syncBranchList() {
   const element = modeler?.get('elementRegistry').get(current.id)
   if (!element) return
   const ids = (element.outgoing || []).map((connection) => connection.id).join(',')
-  if (ids !== current.branches.map((branch) => branch.id).join(',')) remember(element)
+  if (ids !== current.branches.map((branch) => branch.id).join(',')) {
+    const known = new Set(current.branches.map((branch) => branch.id))
+    remember(element)
+    if (!importing) {
+      const added = (element.outgoing || []).map((c) => c.id).find((id) => !known.has(id))
+      if (added) focusBranch(added)
+    }
+  }
+}
+
+/** Flash + focus the name field of a just-created branch for a moment. */
+function focusBranch(id) {
+  focusBranchId.value = id
+  nextTick(() => {
+    document.querySelector(`input[data-branch="${id}"]`)?.focus()
+  })
+  clearTimeout(focusTimer)
+  focusTimer = setTimeout(() => {
+    if (focusBranchId.value === id) focusBranchId.value = null
+  }, 2600)
 }
 
 function currentElement() {
@@ -595,6 +630,39 @@ function clearDefaultFlow() {
   if (!gateway) return
   modeler.get('modeling').updateProperties(gateway, { default: undefined })
   remember(gateway)
+}
+
+/**
+ * One-click branch: drops a preset approval task below the gateway's existing
+ * targets, wires it up and focuses its name field. Native edge-dragging still
+ * works — this covers the case where the admin has to aim a rubber band at a
+ * 36px hit area first; the button removes the aiming entirely.
+ */
+async function addBranch() {
+  const gateway = currentElement()
+  if (!gateway || gateway.businessObject?.$type !== EXCLUSIVE_GATEWAY) return
+  const modeling = modeler.get('modeling')
+  const shape = modeler.get('elementFactory').createShape({ type: 'bpmn:UserTask' })
+  const w = shape.width || 100
+  const h = shape.height || 80
+  // stack below the lowest existing target so branches read top-to-bottom in
+  // the order the gateway evaluates them
+  const bottoms = gateway.outgoing
+    .filter((c) => c.type === 'bpmn:SequenceFlow' && c.target)
+    .map((c) => c.target.y + c.target.height)
+  const x = gateway.x + gateway.width + 160
+  const y = bottoms.length ? Math.max(...bottoms) + 60 : gateway.y + gateway.height - h / 2
+
+  const target = modeling.createShape(shape, { x: Math.round(x), y: Math.round(y) },
+    modeler.get('canvas').getRootElement())
+  applyPreset(target, NODE_GROUPS.flatMap((g) => g.items).find((n) => n.key === 'approve'))
+  const connection = modeling.connect(gateway, target)
+  modeler.get('selection').select(target)
+  // commandStack.changed → syncBranchList re-renders the list; focus lands on
+  // the new name field once Vue flushes the DOM
+  focusBranch(connection.id)
+  await nextTick()
+  notice.value = '已创建新分支：命名并设置条件后才能部署'
 }
 
 /**
@@ -820,6 +888,8 @@ onBeforeUnmount(() => {
                   <input
                     v-model="b.name"
                     class="branch-name"
+                    :class="{ 'branch-focus': focusBranchId === b.id }"
+                    :data-branch="b.id"
                     placeholder="分支名称（通过 / 驳回）"
                     @change="applyFlowName(b.id, b.name)"
                   />
@@ -843,8 +913,16 @@ onBeforeUnmount(() => {
                 <p class="branch-target">→ {{ b.target }}</p>
               </div>
               <p v-if="!selected.branches.length" class="muted small">
-                这个网关还没有出向分支：从网关边缘拖出连线连到下一个节点。
+                这个网关还没有出向分支：从网关边缘拖出连线连到下一个节点，或直接点下方按钮新建。
               </p>
+              <button
+                class="mini ghost branch-add"
+                style="width: auto;"
+                title="在网关下方创建一个审批节点并连为出向分支"
+                @click="addBranch"
+              >
+                ＋ 新建分支
+              </button>
               <button
                 v-if="selected.branches.some((b) => b.isDefault)"
                 class="mini ghost"
@@ -1109,6 +1187,17 @@ onBeforeUnmount(() => {
 }
 .branch-cond:disabled { background: #f3f4f6; color: var(--muted); }
 .branch-target { margin: 4px 0 0; font-size: 11px; color: var(--muted); }
+.branch-add { margin-top: 2px; padding: 4px 10px; }
+/* freshly created branch: the name field flashes so the admin sees where to type */
+.branch-focus {
+  outline: none;
+  border-color: var(--primary);
+  animation: branch-flash 1.3s ease-out 2;
+}
+@keyframes branch-flash {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.22); }
+  50% { box-shadow: none; }
+}
 .bpmn-canvas :deep(.flow-branch .djs-visual > path) {
   stroke: #d97706;
   stroke-width: 2.5px;
