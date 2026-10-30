@@ -109,8 +109,13 @@ auth:
   # sync.failed, login.anomaly, task.overdue) fan out to every active contact:
   #   type: webhook → JSON POST to url
   #   type: email   → plain-text mail to `to` through auth.notify.mail.*
+  #   type: inbox   → M11 per-user rows in sys_message (the SPA bell);
+  #                   on by default, set disabled: true to turn it off.
+  #                   Recipients come from the event payload (assignee /
+  #                   candidateGroups / username), not from this contact.
   notify:
-    contacts: []
+    contacts:
+      - type: inbox
     #  - type: webhook
     #    url: https://ops.example.com/hooks/auth-events
     #  - type: email

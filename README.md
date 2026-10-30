@@ -478,6 +478,37 @@ second run fully idempotent (all-zero delta), and both `sync.completed` and
 `login.anomaly` delivered to webhook **and** mailbox (`[auth-platform]
 sync.completed` to `ops@example.com`).
 
+### M11: in-app message center (2026-10-30)
+
+- **A third `NotifyChannel`** (`InboxChannel`, type `inbox`): the same events
+  that fan out to webhook / email now land as per-user rows in `sys_message`
+  (Flyway V12). Workflow classes changed by zero lines — the event flows
+  through the existing `WorkflowNotifier` port and `NotificationService`.
+- **Recipient resolution from the event payload** (the routing contract):
+  `task.assigned` / `task.overdue` → `assignee`, else `candidateGroups`
+  expanded to every enabled member of each role; `account.locked` → the
+  locked user; everything without a clue (`sync.completed`, `login.anomaly`)
+  → every enabled ADMIN.
+- **Idempotent by schema**: `uk_msg_event (event, ref_id, recipient)` — the
+  SLA scanner rescans every 30 s and a re-render must not duplicate; NULLs in
+  that key make announcements (event = NULL) exempt.
+- **API** (`/api/v1/messages`, session user only): paged inbox (all / unread),
+  unread count, mark one read, mark all read; `POST /announcements`
+  (ADMIN-only) broadcasts to everyone or one role's members. Ownership is
+  enforced in the service layer — marking someone else's row is 404/40400.
+- **Retention**: `MessageRetention` sweeps daily (03:10) — read rows after
+  `auth.message.read-retention-days` (30), unread after 180, so a returning
+  user never finds an emptied inbox.
+- **SPA**: bell + unread badge in the console header (30 s poll, event-driven
+  refresh after marking read), dropdown of the 8 newest, and a `/messages`
+  page (all/unread filter, pagination, mark-all, admin announcement form).
+- Verified: 14 new tests (7 unit on recipient resolution + idempotency +
+  failure containment, 7 MockMvc on the access matrix: anonymous 401/40100,
+  foreign-row 404/40400, announcements ADMIN-only, CSRF, blank title 400)
+  plus a browser E2E 13/13 (start flow → badge +1 → dropdown title → messages
+  page → mark-all → badge gone → broadcast delivered to 11 users → dropdown
+  shows it), Flyway V12 applied on the live MySQL 8.4.
+
 ### Frontend SPA (auth-web)
 
 > Access control: the admin console is restricted to users holding the
@@ -562,6 +593,9 @@ suite intentionally does not.
       (new-location + brute-force rules → `login.anomaly` webhooks)
 - [x] M10b: LDAP directory provider (same SPI, DN-keyed org/user import) +
       email notification contact points (webhook/email channel SPI)
+- [x] M11: in-app message center — third notify channel (`inbox` → sys_message),
+      recipient resolution from event payloads, unread badge + dropdown +
+      messages page, idempotent event delivery, admin announcements, retention sweep
 
 The specification is the code plus the milestone records above — each section
 states what was built and how it was verified. The authoritative schema is the

@@ -20,6 +20,7 @@ const routes = [
       { path: 'portal', name: 'portal', component: () => import('../views/PortalView.vue') },
       { path: 'flow/requests', name: 'flow-requests', component: () => import('../views/flow/RequestsView.vue') },
       { path: 'flow/todo', name: 'flow-todo', component: () => import('../views/flow/TodoView.vue') },
+      { path: 'messages', name: 'messages', component: () => import('../views/MessagesView.vue') },
       { path: 'flow/admin', name: 'flow-admin', component: () => import('../views/flow/FlowAdminView.vue'), meta: { requiresAdmin: true } },
       { path: 'flow/analytics', name: 'flow-analytics', component: () => import('../views/flow/FlowAnalyticsView.vue'), meta: { requiresAdmin: true } },
       { path: 'users', name: 'users', component: () => import('../views/admin/UsersView.vue'), meta: { requiresAdmin: true } },

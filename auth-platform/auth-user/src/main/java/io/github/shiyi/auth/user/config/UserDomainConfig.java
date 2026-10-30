@@ -64,6 +64,30 @@ public class UserDomainConfig {
         return new LoginLogRetention(loginLogs, retentionDays);
     }
 
+    // ---------- M11 message center ----------
+
+    @Bean
+    @ConditionalOnProperty(name = "spring.datasource.url")
+    io.github.shiyi.auth.user.service.MessageService messageService(
+            io.github.shiyi.auth.user.mapper.SysMessageMapper messageMapper,
+            SysUserMapper userMapper, SysUserRoleMapper userRoleMapper,
+            org.springframework.jdbc.core.JdbcTemplate jdbc) {
+        return new io.github.shiyi.auth.user.service.MessageService(
+                messageMapper, userMapper, userRoleMapper, jdbc);
+    }
+
+    /** Daily retention sweep for sys_message (no-op cost in-memory: no service). */
+    @Bean
+    @ConditionalOnProperty(name = "spring.datasource.url")
+    io.github.shiyi.auth.user.service.MessageRetention messageRetention(
+            io.github.shiyi.auth.user.service.MessageService messages,
+            @org.springframework.beans.factory.annotation.Value(
+                    "${auth.message.read-retention-days:30}") int readDays,
+            @org.springframework.beans.factory.annotation.Value(
+                    "${auth.message.unread-retention-days:180}") int unreadDays) {
+        return new io.github.shiyi.auth.user.service.MessageRetention(messages, readDays, unreadDays);
+    }
+
     /** MapperScan only when a DataSource exists; otherwise mappers have no factory and would fail boot. */
     @Configuration
     @ConditionalOnProperty(name = "spring.datasource.url")
