@@ -8,9 +8,9 @@ spring:
     redis:
       # M6: session store — only contacted when the "redis" profile is active
       # (RedisSessionConfig). Override via REDIS_HOST / REDIS_PORT / REDIS_PASSWORD.
-      host: ${REDIS_HOST:localhost}
+      host: ${REDIS_HOST:10.35.79.185}
       port: ${REDIS_PORT:6379}
-      password: ${REDIS_PASSWORD:}
+      password: ${REDIS_PASSWORD:123456}
       timeout: 2s
       lettuce:
         pool:
