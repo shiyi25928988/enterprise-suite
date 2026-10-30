@@ -386,6 +386,30 @@ npm run dev        # http://localhost:8081 — login with admin / admin123
 In dev, Vite proxies `/api`, `/oauth2`, `/.well-known` etc. to the backend on :9000,
 so browser traffic is same-origin — the same topology as production.
 
+### Tests
+
+```bash
+mvn test        # JDK 21 + Maven 3.9+, no database or network needed
+```
+
+The suite is deliberately unit-level: no Spring context, no MySQL, no stub
+servers, so it runs in a few seconds and can gate every commit. It pins the
+invariants that are expensive to rediscover by hand — the rules that look
+correct until a specific input proves otherwise.
+
+| Test | Invariant it protects |
+|---|---|
+| `AnomalyDetectorTest` | `new_location` fires only against a non-empty history and only for an unseen /24; `brute_force` fires exactly at the threshold, so one burst is one event; a failing audit store never escapes into the login path |
+| `NotificationServiceTest` | every ready contact receives the event, envelope keys precede the payload, one dead transport cannot suppress the next, disabled/unready contacts stay silent |
+| `EmailChannelTest` | a mail block without a relay reports unready (so it is skipped, not retried on every login); body renders one field per line in payload order |
+| `LdapDirectoryTest` | DN normalisation is case/whitespace-insensitive; the parent split honours RFC 4514 escapes, so `CN=Smith\, John` does not become its own org root |
+| `SlaClockTest` | hour/minute offsets are converted, and negative values land in the past (how overdue tasks are produced on demand) |
+| `TokenTtlTest` | `null` keeps a stored TTL, non-positive clears it, and a cleared column still resolves to the 30/10-minute defaults — the pair that makes a custom TTL reversible |
+
+End-to-end behaviour (real MySQL + Redis, live HTTP) is covered by the verified
+runs recorded milestone by milestone above; those exercise the wiring this
+suite intentionally does not.
+
 ## Roadmap
 
 - [x] M0 skeleton: multi-module build, three security filter chains, discovery reachable
@@ -425,7 +449,12 @@ so browser traffic is same-origin — the same topology as production.
 - [x] M10b: LDAP directory provider (same SPI, DN-keyed org/user import) +
       email notification contact points (webhook/email channel SPI)
 
-See the [development doc](docs/) (Chinese) for the full specification.
+The specification is the code plus the milestone records above — each section
+states what was built and how it was verified. The authoritative schema is the
+Flyway migration set in
+`auth-platform/auth-server/src/main/resources/db/migration`; endpoint shapes are
+in the `web` package of each module (`/api/auth/**` for sessions and social
+logins, `/api/v1/**` for the admin surface).
 
 ## License
 

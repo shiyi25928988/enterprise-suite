@@ -148,6 +148,16 @@
                     </configuration>
                 </plugin>
 
+                <!-- 测试：Mockito 的 inline mock maker 需要动态挂载 agent，
+                     JDK 21 起默认告警，这里显式允许以免污染测试输出 -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <configuration>
+                        <argLine>-XX:+EnableDynamicAgentLoading -Xshare:off</argLine>
+                    </configuration>
+                </plugin>
+
                 <!-- 可执行 jar：仅 auth-server 中启用 -->
                 <plugin>
                     <groupId>org.springframework.boot</groupId>

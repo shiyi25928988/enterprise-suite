@@ -405,11 +405,9 @@ public class AppRegistryService {
                 .build());
         b.tokenSettings(TokenSettings.builder()
                 // M5c per-device token policy: null falls back to platform defaults
-                .accessTokenTimeToLive(Duration.ofMinutes(
-                        accessTokenTtlMinutes == null || accessTokenTtlMinutes < 1 ? 30 : accessTokenTtlMinutes))
+                .accessTokenTimeToLive(accessTtl(accessTokenTtlMinutes))
                 .refreshTokenTimeToLive(Duration.ofHours(8))
-                .deviceCodeTimeToLive(Duration.ofMinutes(
-                        deviceCodeTtlMinutes == null || deviceCodeTtlMinutes < 1 ? 10 : deviceCodeTtlMinutes))
+                .deviceCodeTimeToLive(deviceTtl(deviceCodeTtlMinutes))
                 .reuseRefreshTokens(false)
                 .build());
         return b.build();
@@ -499,11 +497,28 @@ public class AppRegistryService {
      * a value below 1 clears the column so {@link #buildClient} falls back to the platform default
      * (30 min / 10 min). Without the explicit reset an admin could set a custom TTL but never undo it.
      */
-    private static Integer ttlOrKeep(Integer requested, Integer currentValue) {
+    static Integer ttlOrKeep(Integer requested, Integer currentValue) {
         if (requested == null) {
             return currentValue;
         }
         return requested < 1 ? null : requested;
+    }
+
+    /** Default access-token lifetime for an app with no policy of its own. */
+    static final int DEFAULT_ACCESS_TOKEN_TTL_MINUTES = 30;
+
+    /** Default device-code lifetime; the user code is meant to stay short-lived. */
+    static final int DEFAULT_DEVICE_CODE_TTL_MINUTES = 10;
+
+    /** null / non-positive → platform default, otherwise the configured minutes. */
+    static Duration accessTtl(Integer minutes) {
+        return Duration.ofMinutes(minutes == null || minutes < 1
+                ? DEFAULT_ACCESS_TOKEN_TTL_MINUTES : minutes);
+    }
+
+    static Duration deviceTtl(Integer minutes) {
+        return Duration.ofMinutes(minutes == null || minutes < 1
+                ? DEFAULT_DEVICE_CODE_TTL_MINUTES : minutes);
     }
 
     private static String newSecret() {
