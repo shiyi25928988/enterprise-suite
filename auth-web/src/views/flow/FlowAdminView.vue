@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import BpmnModeler from 'bpmn-js/lib/Modeler'
 import 'bpmn-js/dist/assets/diagram-js.css'
 import 'bpmn-js/dist/assets/bpmn-font/css/bpmn.css'
@@ -108,7 +108,9 @@ const formSchema = ref('')
 const drag = ref(null)      // { node, x, y, moved }
 const armed = ref(null)     // node picked by a click, waiting for a canvas click
 const overCanvas = ref(false)
+const fullscreen = ref(false)
 let modeler = null
+let canvasObserver = null
 
 const hint = computed(() => {
   if (drag.value?.moved) return '松开鼠标放置节点'
@@ -206,6 +208,29 @@ function newDiagram() {
 
 function fitViewport() {
   modeler?.get('canvas').zoom('fit-viewport')
+}
+
+/**
+ * Fullscreen editing is a fixed overlay rather than the browser Fullscreen API:
+ * every edge of the designer stays reachable (palette, canvas, properties), the
+ * layout is identical for embedders and iframes, and no permission prompt is
+ * involved — so it also works when this page is driven by automation.
+ *
+ * bpmn-js caches the SVG size and its viewbox transform, so the container must
+ * be told to re-measure after the layout settles; without that the canvas keeps
+ * the old width and the diagram sits off-centre.
+ */
+async function toggleFullscreen() {
+  fullscreen.value = !fullscreen.value
+  document.body.style.overflow = fullscreen.value ? 'hidden' : ''
+  await nextTick()
+  requestAnimationFrame(() => {
+    const canvasApi = modeler?.get('canvas')
+    if (!canvasApi) return
+    canvasApi.resized()
+    canvasApi.zoom('fit-viewport')
+  })
+  if (fullscreen.value) notice.value = '已进入全屏编辑 · Esc 退出'
 }
 
 // ---- placing nodes ------------------------------------------------------
@@ -321,10 +346,14 @@ function onCanvasClick(evt) {
 }
 
 function onKeydown(evt) {
-  if (evt.key === 'Escape' && armed.value) {
+  if (evt.key !== 'Escape') return
+  // Esc peels one layer at a time: first the armed node, then fullscreen.
+  if (armed.value) {
     armed.value = null
     notice.value = ''
+    return
   }
+  if (fullscreen.value) toggleFullscreen()
 }
 
 // ---- selection / properties --------------------------------------------
@@ -377,6 +406,10 @@ const fmtTime = (iso) => (iso ? new Date(iso).toLocaleString() : '—')
 onMounted(async () => {
   modeler = new BpmnModeler({ container: canvas.value })
   modeler.on('element.click', (evt) => remember(evt.element))
+  // Any container resize (fullscreen toggle, window resize, XML panel opening)
+  // must reach bpmn-js, otherwise it draws against a stale viewport size.
+  canvasObserver = new ResizeObserver(() => modeler?.get('canvas').resized())
+  canvasObserver.observe(canvas.value)
   window.addEventListener('keydown', onKeydown)
   await importXml()
   await load()
@@ -385,6 +418,8 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKeydown)
   window.removeEventListener('pointermove', onDragMove)
+  canvasObserver?.disconnect()
+  document.body.style.overflow = ''
   modeler?.destroy()
 })
 </script>
@@ -403,98 +438,109 @@ onBeforeUnmount(() => {
     <p v-if="error" class="error">{{ error }}</p>
     <p v-if="notice" class="ok">{{ notice }}</p>
 
-    <div class="designer-bar">
-      <input v-model="deployName" style="width: 200px;" placeholder="部署名称" />
-      <button class="mini" style="width: auto;" @click="newDiagram">新建</button>
-      <button class="mini" style="width: auto;" @click="exportXml">导出 XML</button>
-      <button class="mini" style="width: auto;" @click="showXml = !showXml">
-        {{ showXml ? '隐藏 XML' : '编辑 XML' }}
-      </button>
-      <button class="mini" style="width: auto;" @click="importXml">导入 XML</button>
-      <button style="width: auto; margin: 0 0 0 auto; padding: 6px 16px;" @click="deploy">
-        部署
-      </button>
-    </div>
-
-    <div class="designer-grid">
-      <div class="palette">
-        <template v-for="group in NODE_GROUPS" :key="group.label">
-          <p class="palette-group">{{ group.label }}</p>
-          <div
-            v-for="node in group.items"
-            :key="node.key"
-            class="palette-item"
-            :class="[node.tone, { armed: armed?.key === node.key }]"
-            :title="node.desc"
-            @pointerdown.prevent="startDrag(node, $event)"
-          >
-            <span class="glyph" :class="node.tone" />
-            <span class="meta">
-              <b>{{ node.label }}</b>
-              <small>{{ node.desc }}</small>
-            </span>
-          </div>
-        </template>
-        <p class="palette-tip">{{ hint }}</p>
-      </div>
-
-      <div class="canvas-col">
-        <div class="canvas-bar">
-          <span class="muted small">悬停节点边缘拖出连线 · 选中后按 Delete 删除</span>
-          <button class="mini ghost" @click="fitViewport">适应画布</button>
-        </div>
-        <div
-          ref="canvas"
-          class="bpmn-canvas"
-          :class="{ 'drop-active': overCanvas, armed: armed }"
-          @click="onCanvasClick"
-        />
-        <textarea v-if="showXml" v-model="xmlText" rows="12" class="xml-box" spellcheck="false" />
-      </div>
-
-      <aside>
-        <h4>节点属性</h4>
-        <template v-if="selected">
-          <p class="muted" style="font-size: 12px;">{{ selected.type }} · {{ selected.id }}</p>
-          <label class="field">
-            <span>名称</span>
-            <input v-model="selected.name" @change="applyName" />
-          </label>
-          <template v-if="selected.type === 'bpmn:UserTask'">
-            <label class="field">
-              <span>候选角色（逗号分隔角色代码）</span>
-              <input
-                v-model="selected.candidateGroups"
-                :disabled="selected.countersign"
-                placeholder="ADMIN"
-                @change="applyCandidates"
-              />
-            </label>
-            <label class="check">
-              <input v-model="selected.countersign" type="checkbox" @change="applyCountersign" />
-              <span>会签（并行多实例，一票否决）</span>
-            </label>
-            <p v-if="selected.countersign" class="muted small">
-              会签按流程变量 <code>approvers</code>（逗号分隔的用户名）展开，每个实例分派给
-              <code>${user}</code>；任一实例驳回即以 <code>csRejected</code> 提前结束。
-            </p>
-          </template>
-        </template>
-        <p v-else class="muted">点击画布中的节点编辑属性</p>
-
-        <h4 style="margin-top: 20px;">表单设计（{{ formKey || '未选择' }}）</h4>
-        <label class="field">
-          <span>表单名称</span>
-          <input v-model="formName" />
-        </label>
-        <label class="field">
-          <span>字段定义（JSON）</span>
-          <textarea v-model="formSchema" rows="10" class="xml-box" spellcheck="false" />
-        </label>
-        <button class="mini" style="width: auto;" :disabled="!formKey" @click="saveFormSchema">
-          保存表单
+    <div class="designer-shell" :class="{ fullscreen }">
+      <div class="designer-head">
+        <h3 style="margin: 0;">流程设计器</h3>
+        <code class="head-key">{{ deployName || 'my-approval' }}</code>
+        <button class="mini ghost" style="width: auto; margin: 0 0 0 auto;" @click="toggleFullscreen">
+          退出全屏（Esc）
         </button>
-      </aside>
+      </div>
+
+      <div class="designer-bar">
+        <input v-model="deployName" style="width: 200px;" placeholder="部署名称" />
+        <button class="mini" style="width: auto;" @click="newDiagram">新建</button>
+        <button class="mini" style="width: auto;" @click="exportXml">导出 XML</button>
+        <button class="mini" style="width: auto;" @click="showXml = !showXml">
+          {{ showXml ? '隐藏 XML' : '编辑 XML' }}
+        </button>
+        <button class="mini" style="width: auto;" @click="importXml">导入 XML</button>
+        <button v-if="!fullscreen" class="mini ghost" style="width: auto;" @click="toggleFullscreen">
+          全屏编辑
+        </button>
+        <button style="width: auto; padding: 6px 16px; margin-left: auto;" @click="deploy">部署</button>
+      </div>
+
+      <div class="designer-grid">
+        <div class="palette">
+          <template v-for="group in NODE_GROUPS" :key="group.label">
+            <p class="palette-group">{{ group.label }}</p>
+            <div
+              v-for="node in group.items"
+              :key="node.key"
+              class="palette-item"
+              :class="[node.tone, { armed: armed?.key === node.key }]"
+              :title="node.desc"
+              @pointerdown.prevent="startDrag(node, $event)"
+            >
+              <span class="glyph" :class="node.tone" />
+              <span class="meta">
+                <b>{{ node.label }}</b>
+                <small>{{ node.desc }}</small>
+              </span>
+            </div>
+          </template>
+          <p class="palette-tip">{{ hint }}</p>
+        </div>
+
+        <div class="canvas-col">
+          <div class="canvas-bar">
+            <span class="muted small">悬停节点边缘拖出连线 · 选中后按 Delete 删除</span>
+            <button class="mini ghost" @click="fitViewport">适应画布</button>
+          </div>
+          <div
+            ref="canvas"
+            class="bpmn-canvas"
+            :class="{ 'drop-active': overCanvas, armed: armed }"
+            @click="onCanvasClick"
+          />
+          <textarea v-if="showXml" v-model="xmlText" rows="12" class="xml-box" spellcheck="false" />
+        </div>
+
+        <aside>
+          <h4>节点属性</h4>
+          <template v-if="selected">
+            <p class="muted" style="font-size: 12px;">{{ selected.type }} · {{ selected.id }}</p>
+            <label class="field">
+              <span>名称</span>
+              <input v-model="selected.name" @change="applyName" />
+            </label>
+            <template v-if="selected.type === 'bpmn:UserTask'">
+              <label class="field">
+                <span>候选角色（逗号分隔角色代码）</span>
+                <input
+                  v-model="selected.candidateGroups"
+                  :disabled="selected.countersign"
+                  placeholder="ADMIN"
+                  @change="applyCandidates"
+                />
+              </label>
+              <label class="check">
+                <input v-model="selected.countersign" type="checkbox" @change="applyCountersign" />
+                <span>会签（并行多实例，一票否决）</span>
+              </label>
+              <p v-if="selected.countersign" class="muted small">
+                会签按流程变量 <code>approvers</code>（逗号分隔的用户名）展开，每个实例分派给
+                <code>${user}</code>；任一实例驳回即以 <code>csRejected</code> 提前结束。
+              </p>
+            </template>
+          </template>
+          <p v-else class="muted">点击画布中的节点编辑属性</p>
+
+          <h4 style="margin-top: 20px;">表单设计（{{ formKey || '未选择' }}）</h4>
+          <label class="field">
+            <span>表单名称</span>
+            <input v-model="formName" />
+          </label>
+          <label class="field">
+            <span>字段定义（JSON）</span>
+            <textarea v-model="formSchema" rows="10" class="xml-box" spellcheck="false" />
+          </label>
+          <button class="mini" style="width: auto;" :disabled="!formKey" @click="saveFormSchema">
+            保存表单
+          </button>
+        </aside>
+      </div>
     </div>
 
     <h4 style="margin-top: 24px;">已部署流程</h4>
@@ -542,6 +588,60 @@ onBeforeUnmount(() => {
   gap: 16px;
   align-items: start;
 }
+
+/* ---- fullscreen editing ------------------------------------------------
+   A fixed overlay, not the browser Fullscreen API: the palette, canvas and
+   properties panel all stay in reach, Esc leaves, and the page behind is
+   scroll-locked so wheel zooming the diagram never scrolls the document. */
+.designer-head { display: none; }
+.designer-shell.fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  padding: 12px 16px 14px;
+  background: #f6f8fc;
+  overflow: hidden;
+}
+.designer-shell.fullscreen .designer-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.designer-shell.fullscreen .head-key {
+  font-size: 12px;
+  color: var(--muted);
+  background: #eef2f7;
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+.designer-shell.fullscreen .designer-bar { margin: 8px 0 10px; flex: none; }
+.designer-shell.fullscreen .designer-grid {
+  flex: 1;
+  min-height: 0;
+  align-items: stretch;
+}
+.designer-shell.fullscreen .palette,
+.designer-shell.fullscreen aside {
+  min-height: 0;
+  max-height: 100%;
+  overflow: auto;
+}
+.designer-shell.fullscreen .canvas-col {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.designer-shell.fullscreen .bpmn-canvas {
+  flex: 1;
+  height: auto;
+  min-height: 0;
+}
+.designer-shell.fullscreen .xml-box { flex: none; height: 170px; }
 
 /* ---- palette ---- */
 .palette {
@@ -599,7 +699,12 @@ onBeforeUnmount(() => {
 .canvas-col { min-width: 0; }
 .canvas-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
 .canvas-bar .small { font-size: 12px; white-space: nowrap; }
-.canvas-bar .ghost { width: auto; margin-left: auto; margin-top: 0; padding: 4px 10px; background: #fff; color: var(--primary); border: 1px solid var(--primary); }
+/* App.vue styles every <button> as a full-width form submit; the designer is a
+   toolbar, so its buttons opt out of that and share one compact size. */
+.designer-bar button,
+.designer-head button { margin: 0; padding: 6px 14px; font-size: 13px; }
+.ghost { width: auto; background: #fff; color: var(--primary); border: 1px solid var(--primary); }
+.canvas-bar .ghost { margin-left: auto; padding: 4px 10px; }
 .bpmn-canvas {
   height: 540px;
   border: 1px solid var(--border);
